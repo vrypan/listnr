@@ -1,24 +1,51 @@
 package server
 
 import (
-	"io"
+	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"log/slog"
 	"net/http"
 
+	"github.com/microcosm-cc/bluemonday"
 	"github.com/vrypan/listnr/internal/ap"
 	"github.com/vrypan/listnr/internal/config"
+	"github.com/vrypan/listnr/internal/fedi"
 	"github.com/vrypan/listnr/internal/store"
 )
 
-type Server struct {
-	cfg *config.Config
-	st  *store.Store
-	ap  *ap.Handler
-	log *slog.Logger
+// ActorFetcher resolves remote actors (implemented by fedi.Client).
+type ActorFetcher interface {
+	FetchActor(ctx context.Context, actorID string, bypassCache bool) (*fedi.Actor, error)
 }
 
-func New(cfg *config.Config, st *store.Store, apHandler *ap.Handler, log *slog.Logger) *Server {
-	return &Server{cfg: cfg, st: st, ap: apHandler, log: log}
+// Deliverer queues outbound activities (implemented by delivery.Queue).
+type Deliverer interface {
+	Enqueue(activityJSON []byte, inboxURL string) error
+	FanOut(activityJSON []byte) error
+}
+
+type Server struct {
+	cfg      *config.Config
+	st       *store.Store
+	ap       *ap.Handler
+	fetch    ActorFetcher
+	deliver  Deliverer
+	sanitize *bluemonday.Policy
+	log      *slog.Logger
+}
+
+func New(cfg *config.Config, st *store.Store, apHandler *ap.Handler,
+	fetch ActorFetcher, deliver Deliverer, log *slog.Logger) *Server {
+	return &Server{
+		cfg:      cfg,
+		st:       st,
+		ap:       apHandler,
+		fetch:    fetch,
+		deliver:  deliver,
+		sanitize: bluemonday.UGCPolicy(),
+		log:      log,
+	}
 }
 
 func (s *Server) Routes() http.Handler {
@@ -31,20 +58,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	return s.logRequests(mux)
-}
-
-// handleInbox is a stub: it acknowledges deliveries without processing them.
-// Signature verification and activity dispatch land in milestone 2.
-func (s *Server) handleInbox(w http.ResponseWriter, r *http.Request) {
-	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
-	if err != nil {
-		http.Error(w, "read error", http.StatusBadRequest)
-		return
-	}
-	s.log.Info("inbox activity received (ignored: not implemented)",
-		"bytes", len(body), "from", r.RemoteAddr)
-	w.WriteHeader(http.StatusAccepted)
+	return mux
 }
 
 func (s *Server) handleOutbox(w http.ResponseWriter, r *http.Request) {
@@ -65,8 +79,8 @@ func (s *Server) handleFollowers(w http.ResponseWriter, r *http.Request) {
 	s.writeCollection(w, "/followers", n)
 }
 
-// writeCollection serves a count-only OrderedCollection; item pages come
-// with milestone 2.
+// writeCollection serves a count-only OrderedCollection; the outbox gains
+// item pages in milestone 3.
 func (s *Server) writeCollection(w http.ResponseWriter, path string, total int) {
 	ap.WriteJSON(w, ap.ContentType, map[string]any{
 		"@context":   "https://www.w3.org/ns/activitystreams",
@@ -76,9 +90,9 @@ func (s *Server) writeCollection(w http.ResponseWriter, path string, total int) 
 	})
 }
 
-func (s *Server) logRequests(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		next.ServeHTTP(w, r)
-		s.log.Debug("request", "method", r.Method, "path", r.URL.Path)
-	})
+// randomID returns a 128-bit random hex string for activity ids.
+func randomID() string {
+	b := make([]byte, 16)
+	rand.Read(b)
+	return hex.EncodeToString(b)
 }

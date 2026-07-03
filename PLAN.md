@@ -17,6 +17,13 @@ decisions**, implement them as written.
 - Single actor only. No multi-actor support anywhere.
 - Module: `github.com/vrypan/listnr`.
 
+> **Status:** milestones 1 and 2 are DONE (see the packages below plus
+> `internal/httpsig`, `internal/fedi`, `internal/delivery`,
+> `internal/server/inbox.go`, and their tests). Implementation continues at
+> **milestone 3**. Milestone 2's section is kept for reference — its
+> behavior is covered by tests in `internal/httpsig`, `internal/delivery`,
+> and `internal/server`; do not change that behavior without failing tests.
+
 ## Current state (milestone 1 — done)
 
 ```

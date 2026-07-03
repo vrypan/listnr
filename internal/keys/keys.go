@@ -43,6 +43,27 @@ func LoadOrCreate(dataDir string) (*rsa.PrivateKey, error) {
 	}
 }
 
+// ParsePublicPEM parses a remote actor's public key. Accepts both SPKI
+// ("PUBLIC KEY") and PKCS#1 ("RSA PUBLIC KEY") encodings.
+func ParsePublicPEM(pemStr string) (*rsa.PublicKey, error) {
+	block, _ := pem.Decode([]byte(pemStr))
+	if block == nil {
+		return nil, errors.New("no PEM block in public key")
+	}
+	if key, err := x509.ParsePKCS1PublicKey(block.Bytes); err == nil {
+		return key, nil
+	}
+	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return nil, err
+	}
+	rsaPub, ok := pub.(*rsa.PublicKey)
+	if !ok {
+		return nil, fmt.Errorf("public key is %T, not RSA", pub)
+	}
+	return rsaPub, nil
+}
+
 // PublicPEM renders the public half in the SPKI PEM form ActivityPub expects.
 func PublicPEM(key *rsa.PrivateKey) (string, error) {
 	der, err := x509.MarshalPKIXPublicKey(&key.PublicKey)

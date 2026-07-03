@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"os"
@@ -8,6 +9,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/vrypan/listnr/internal/ap"
 	"github.com/vrypan/listnr/internal/config"
+	"github.com/vrypan/listnr/internal/delivery"
+	"github.com/vrypan/listnr/internal/fedi"
 	"github.com/vrypan/listnr/internal/keys"
 	"github.com/vrypan/listnr/internal/server"
 	"github.com/vrypan/listnr/internal/store"
@@ -37,8 +40,16 @@ var serveCmd = &cobra.Command{
 		}
 		defer st.Close()
 
+		keyID := cfg.Actor.ID() + "#main-key"
+		fetcher := fedi.NewClient(st, key, keyID)
+		queue := delivery.NewQueue(st, key, keyID, log)
+
+		ctx, cancel := context.WithCancel(cmd.Context())
+		defer cancel()
+		go queue.Run(ctx)
+
 		apHandler := &ap.Handler{Actor: cfg.Actor, PublicKeyPEM: pubPEM}
-		srv := server.New(cfg, st, apHandler, log)
+		srv := server.New(cfg, st, apHandler, fetcher, queue, log)
 
 		log.Info("listnr starting",
 			"handle", "@"+cfg.Actor.Handle(),

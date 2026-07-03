@@ -69,6 +69,8 @@ CREATE TABLE IF NOT EXISTS actor_cache (
 	name           TEXT NOT NULL DEFAULT '',
 	handle         TEXT NOT NULL DEFAULT '',
 	icon_url       TEXT NOT NULL DEFAULT '',
+	inbox          TEXT NOT NULL DEFAULT '',
+	shared_inbox   TEXT NOT NULL DEFAULT '',
 	fetched_at     TEXT NOT NULL
 );
 `
