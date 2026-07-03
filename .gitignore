@@ -1,0 +1,6 @@
+listnr
+*.db
+*.db-shm
+*.db-wal
+*.pem
+listnr.toml
