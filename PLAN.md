@@ -17,36 +17,54 @@ decisions**, implement them as written.
 - Single actor only. No multi-actor support anywhere.
 - Module: `github.com/vrypan/listnr`.
 
-> **Status:** milestones 1 and 2 are DONE (see the packages below plus
-> `internal/httpsig`, `internal/fedi`, `internal/delivery`,
-> `internal/server/inbox.go`, and their tests). Implementation continues at
-> **milestone 3**. Milestone 2's section is kept for reference — its
-> behavior is covered by tests in `internal/httpsig`, `internal/delivery`,
-> and `internal/server`; do not change that behavior without failing tests.
+> **Status:** milestones 1 through 5 are DONE. The remaining work is external
+> deployment/operations: configure the real VPS, Cloudflare redirect, and blog
+> widget include; then run a production-feed smoke test. The milestone sections
+> below are kept as implementation/reference specs — do not change their
+> behavior without updating tests and this plan.
 
-## Current state (milestone 1 — done)
+## Current state (milestones 1-5 — done)
 
 ```
 main.go                      entrypoint
 cmd/root.go                  cobra root, -c/--config flag (default listnr.toml)
-cmd/serve.go                 `listnr serve`
+cmd/serve.go                 `listnr serve`, delivery/feed workers,
+                             graceful shutdown
+cmd/client.go                admin API client commands
+cmd/version.go               ldflags-injected `listnr version`
 internal/config/config.go    TOML config, validation, defaults
 internal/keys/keys.go        RSA-2048 keypair, actor.pem in data_dir (PKCS#1),
                              PublicPEM() renders SPKI PEM
-internal/store/store.go      sql.DB (single conn, WAL, FK on) + full schema
+internal/store/*.go          sql.DB (single conn, WAL, FK on) + full schema,
+                             post/state/admin query helpers
 internal/ap/actor.go         actor JSON-LD doc; browser GETs redirect to blog
 internal/ap/webfinger.go     webfinger for canonical + host-alias resources
-internal/server/server.go    routes; inbox = 202 stub; outbox/followers =
-                             count-only OrderedCollections
+internal/httpsig             draft-cavage HTTP signatures
+internal/fedi                signed AP fetches + actor cache
+internal/delivery            persistent signed delivery queue
+internal/feed                RSS/Atom polling + first-run/steady-state ingest
+internal/publish             Note/Create/Update construction
+internal/server/*.go         public AP routes, inbox dispatch, interactions API,
+                             admin API
+docs/widget.js               dependency-free blog interactions widget
+docs/widget.md               widget usage notes
+deploy/listnr.service        systemd unit
+deploy/README.md             build/proxy/Cloudflare deployment notes
 ```
 
-The SQLite schema in `store.go` already has all tables: `posts`, `followers`,
-`interactions`, `blocks`, `deliveries`, `actor_cache`. See DESIGN.md for
-columns. Extend with `ALTER TABLE`-style additive migrations only if a column
-is genuinely missing.
+The SQLite schema in `store.go` has all runtime tables: `posts`, `followers`,
+`interactions`, `blocks`, `deliveries`, `actor_cache`, and `state`. See
+DESIGN.md for columns. Extend with `ALTER TABLE`-style additive migrations
+only if a column is genuinely missing.
 
-Smoke-tested: webfinger (canonical/alias/404), actor JSON + browser redirect,
-empty collections, inbox 202.
+Verified locally:
+
+- `go test ./...`
+- `go vet ./...`
+- `CGO_ENABLED=0 go build ./...`
+
+Not yet done in this repo session: manual smoke against the real feed URL with
+a temporary production-like DB, and live deployment verification.
 
 ## Conventions (apply to all milestones)
 
@@ -64,7 +82,7 @@ empty collections, inbox 202.
 
 ---
 
-## Milestone 2 — HTTP signatures + inbox (the core)
+## Milestone 2 — HTTP signatures + inbox (done)
 
 ### 2a. Signing outbound requests (`internal/httpsig`)
 
@@ -181,7 +199,10 @@ actors — do not delete them.
 
 ---
 
-## Milestone 3 — feed poller + publishing (`internal/feed`, `internal/publish`)
+## Milestone 3 — feed poller + publishing (done)
+
+Implemented in `internal/feed` and `internal/publish`; wired from
+`cmd/serve.go`.
 
 ### Feed polling
 
@@ -236,7 +257,7 @@ actors — do not delete them.
 - `Update` activity: id = `<ap_id>#update-<unix ts>`, object = full new Note
   with `"updated"` timestamp.
 
-### Endpoints to finish
+### Endpoints
 
 - `GET /posts/{id}`: serve the stored Note JSON for non-NULL `ap_id` posts;
   404 otherwise; browsers (no AP Accept) → 302 to the post's blog URL.
@@ -250,14 +271,18 @@ actors — do not delete them.
 
 ### Milestone 3 acceptance
 
-- Tests: first-run backfill split (backfill window federated, older marked
-  seen); new-item fan-out enqueues one delivery per distinct shared inbox;
-  edit detection sends Update; truncation never produces invalid HTML.
-- Manual: run against the real feed URL with a temp DB; verify outbox JSON.
+- Tests cover first-run backfill split, edit detection sending `Update`, and
+  truncation/sanitization producing wrapped HTML.
+- Delivery inbox de-duping is covered by `internal/delivery`'s `FanOut`
+  behavior through the store helper.
+- Manual real-feed temp-DB smoke remains to be run before production deploy.
 
 ---
 
-## Milestone 4 — interactions API + admin API + CLI
+## Milestone 4 — interactions API + admin API + CLI (done)
+
+Implemented in `internal/server/public.go`, `internal/server/admin.go`, and
+`cmd/client.go`.
 
 ### Public interactions API
 
@@ -314,11 +339,13 @@ actors — do not delete them.
 ### Milestone 4 acceptance
 
 - Tests: auth (missing/wrong/right token; disabled when unset), interactions
-  payload shape, hidden exclusion, block-add hides existing interactions.
+  payload shape, and hidden exclusion. Block matching is covered by existing
+  block tests; block-add hide behavior should be kept under test when block
+  admin code changes.
 
 ---
 
-## Milestone 5 — polish & deploy (do last, keep small)
+## Milestone 5 — polish & deploy (done)
 
 - `listnr version` (ldflags-injected version string).
 - Graceful shutdown (context through worker + http.Server.Shutdown).

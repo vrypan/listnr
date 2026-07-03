@@ -73,6 +73,11 @@ CREATE TABLE IF NOT EXISTS actor_cache (
 	shared_inbox   TEXT NOT NULL DEFAULT '',
 	fetched_at     TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS state (
+	key   TEXT PRIMARY KEY,
+	value TEXT NOT NULL
+);
 `
 
 type Store struct {

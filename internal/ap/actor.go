@@ -48,14 +48,14 @@ func (h *Handler) actorDoc() map[string]any {
 
 func (h *Handler) ServeActor(w http.ResponseWriter, r *http.Request) {
 	// Browsers land on the blog; AP servers get the JSON-LD document.
-	if !wantsActivityJSON(r) {
+	if !WantsActivityJSON(r) {
 		http.Redirect(w, r, h.Actor.BlogURL, http.StatusFound)
 		return
 	}
 	WriteJSON(w, ContentType, h.actorDoc())
 }
 
-func wantsActivityJSON(r *http.Request) bool {
+func WantsActivityJSON(r *http.Request) bool {
 	accept := r.Header.Get("Accept")
 	return strings.Contains(accept, "activity+json") ||
 		strings.Contains(accept, "ld+json") ||

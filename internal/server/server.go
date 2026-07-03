@@ -31,6 +31,7 @@ type Server struct {
 	ap       *ap.Handler
 	fetch    ActorFetcher
 	deliver  Deliverer
+	pollNow  func(context.Context) error
 	sanitize *bluemonday.Policy
 	log      *slog.Logger
 }
@@ -48,6 +49,10 @@ func New(cfg *config.Config, st *store.Store, apHandler *ap.Handler,
 	}
 }
 
+func (s *Server) SetPollFunc(fn func(context.Context) error) {
+	s.pollNow = fn
+}
+
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /.well-known/webfinger", s.ap.ServeWebfinger)
@@ -55,6 +60,9 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /inbox", s.handleInbox)
 	mux.HandleFunc("GET /outbox", s.handleOutbox)
 	mux.HandleFunc("GET /followers", s.handleFollowers)
+	mux.HandleFunc("GET /posts/{id}", s.handlePost)
+	mux.HandleFunc("GET /api/interactions", s.handleInteractions)
+	mux.HandleFunc("/admin/", s.handleAdmin)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
@@ -67,7 +75,21 @@ func (s *Server) handleOutbox(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "server error", http.StatusInternalServerError)
 		return
 	}
-	s.writeCollection(w, "/outbox", n)
+	page := r.URL.Query().Get("page")
+	if page == "" {
+		doc := map[string]any{
+			"@context":   "https://www.w3.org/ns/activitystreams",
+			"id":         "https://" + s.cfg.Actor.Host + "/outbox",
+			"type":       "OrderedCollection",
+			"totalItems": n,
+		}
+		if n > 0 {
+			doc["first"] = "https://" + s.cfg.Actor.Host + "/outbox?page=1"
+		}
+		ap.WriteJSON(w, ap.ContentType, doc)
+		return
+	}
+	s.handleOutboxPage(w, r, n)
 }
 
 func (s *Server) handleFollowers(w http.ResponseWriter, r *http.Request) {

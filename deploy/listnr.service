@@ -1,0 +1,14 @@
+[Unit]
+Description=listnr ActivityPub bridge
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/listnr serve -c /etc/listnr/listnr.toml
+Restart=always
+DynamicUser=yes
+StateDirectory=listnr
+
+[Install]
+WantedBy=multi-user.target
+

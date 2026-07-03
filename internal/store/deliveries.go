@@ -68,3 +68,9 @@ func (s *Store) CleanupDeliveries(maxAge time.Duration) error {
 		ts(time.Now().Add(-maxAge)))
 	return err
 }
+
+func (s *Store) PendingDeliveryCount() (int, error) {
+	var n int
+	err := s.DB.QueryRow(`SELECT COUNT(*) FROM deliveries WHERE status = 'pending'`).Scan(&n)
+	return n, err
+}

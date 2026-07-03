@@ -1,5 +1,13 @@
 package store
 
+type Follower struct {
+	ID          int64  `json:"id"`
+	ActorID     string `json:"actor_id"`
+	Inbox       string `json:"inbox"`
+	SharedInbox string `json:"shared_inbox"`
+	FollowedAt  string `json:"followed_at"`
+}
+
 func (s *Store) UpsertFollower(actorID, inbox, sharedInbox string) error {
 	_, err := s.DB.Exec(`
 		INSERT INTO followers (actor_id, inbox, shared_inbox)
@@ -13,6 +21,30 @@ func (s *Store) UpsertFollower(actorID, inbox, sharedInbox string) error {
 func (s *Store) DeleteFollower(actorID string) error {
 	_, err := s.DB.Exec(`DELETE FROM followers WHERE actor_id = ?`, actorID)
 	return err
+}
+
+func (s *Store) DeleteFollowerByID(id int64) error {
+	_, err := s.DB.Exec(`DELETE FROM followers WHERE id = ?`, id)
+	return err
+}
+
+func (s *Store) ListFollowers() ([]Follower, error) {
+	rows, err := s.DB.Query(`
+		SELECT id, actor_id, inbox, shared_inbox, followed_at
+		FROM followers ORDER BY followed_at DESC, id DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var followers []Follower
+	for rows.Next() {
+		var f Follower
+		if err := rows.Scan(&f.ID, &f.ActorID, &f.Inbox, &f.SharedInbox, &f.FollowedAt); err != nil {
+			return nil, err
+		}
+		followers = append(followers, f)
+	}
+	return followers, rows.Err()
 }
 
 // DeleteFollowersWithInbox removes all followers reachable only through the

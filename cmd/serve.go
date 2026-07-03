@@ -5,12 +5,16 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/vrypan/listnr/internal/ap"
 	"github.com/vrypan/listnr/internal/config"
 	"github.com/vrypan/listnr/internal/delivery"
 	"github.com/vrypan/listnr/internal/fedi"
+	"github.com/vrypan/listnr/internal/feed"
 	"github.com/vrypan/listnr/internal/keys"
 	"github.com/vrypan/listnr/internal/server"
 	"github.com/vrypan/listnr/internal/store"
@@ -44,18 +48,39 @@ var serveCmd = &cobra.Command{
 		fetcher := fedi.NewClient(st, key, keyID)
 		queue := delivery.NewQueue(st, key, keyID, log)
 
-		ctx, cancel := context.WithCancel(cmd.Context())
+		ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()
 		go queue.Run(ctx)
 
 		apHandler := &ap.Handler{Actor: cfg.Actor, PublicKeyPEM: pubPEM}
 		srv := server.New(cfg, st, apHandler, fetcher, queue, log)
+		poller := feed.NewPoller(cfg, st, queue, log)
+		srv.SetPollFunc(poller.Trigger)
+		go poller.Run(ctx)
+		httpSrv := &http.Server{Addr: cfg.Server.Listen, Handler: srv.Routes()}
 
 		log.Info("listnr starting",
 			"handle", "@"+cfg.Actor.Handle(),
 			"actor", cfg.Actor.ID(),
 			"listen", cfg.Server.Listen)
-		return http.ListenAndServe(cfg.Server.Listen, srv.Routes())
+		errc := make(chan error, 1)
+		go func() {
+			errc <- httpSrv.ListenAndServe()
+		}()
+		select {
+		case <-ctx.Done():
+			shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer shutdownCancel()
+			cancel()
+			return httpSrv.Shutdown(shutdownCtx)
+		case err := <-errc:
+			if err == http.ErrServerClosed {
+				return nil
+			}
+			return err
+		}
 	},
 }
 
