@@ -33,7 +33,7 @@ fully static and is never touched.
 | POST | `/inbox` | The only write endpoint. Verifies HTTP Signature, dispatches by activity type (see below). |
 | GET | `/outbox` | `OrderedCollection` of past `Create(Note)` activities, paged. |
 | GET | `/followers` | `OrderedCollection`; publishes `totalItems`, items pages optional. |
-| GET | `/posts/{id}` | Dereferenceable `Note` object for each announced post. |
+| GET | `/posts/{id}` | Dereferenceable `Note` object for each announced post. Browsers get an interstitial that opens the post on the visitor's own instance (`/authorize_interaction`, instance remembered in localStorage). |
 
 ### Public (blog integration)
 

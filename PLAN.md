@@ -262,7 +262,11 @@ Implemented in `internal/feed` and `internal/publish`; wired from
 ### Endpoints
 
 - `GET /posts/{id}`: serve the stored Note JSON for non-NULL `ap_id` posts;
-  404 otherwise; browsers (no AP Accept) → 302 to the post's blog URL.
+  404 otherwise; browsers (no AP Accept) get an HTML interstitial that
+  sends them to the post on their own instance via
+  `https://<instance>/authorize_interaction?uri=<note id>` (instance
+  remembered in localStorage, auto-redirect once per tab session), with a
+  fallback link to the blog post.
 - `GET /outbox`: keep `totalItems`; add `first` page
   (`/outbox?page=1`, 20 `Create` activities per page, newest first,
   `OrderedCollectionPage` with `next` when more remain).

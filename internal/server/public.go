@@ -20,7 +20,7 @@ func (s *Server) handlePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !ap.WantsActivityJSON(r) {
-		http.Redirect(w, r, post.URL, http.StatusFound)
+		s.serveInterstitial(w, post)
 		return
 	}
 	ap.WriteJSON(w, ap.ContentType, publish.Note(s.cfg.Actor, post))

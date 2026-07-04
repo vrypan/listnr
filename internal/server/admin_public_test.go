@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/vrypan/listnr/internal/store"
@@ -80,5 +81,45 @@ func testInteraction(postID int64, kind, apID string) *store.Interaction {
 		APID: apID, Kind: kind, PostID: postID, ActorID: remoteActorID,
 		ActorHandle: "alice@remote.example", ActorName: "Alice", Published: "2026-07-04T10:00:00Z",
 		ContentHTML: "<p>hello</p>",
+	}
+}
+
+func TestPostInterstitialForBrowsers(t *testing.T) {
+	e := newTestEnv(t)
+
+	// Browser (no AP Accept header) gets the instance-chooser page.
+	r := httptest.NewRequest(http.MethodGet, postAPID, nil)
+	w := httptest.NewRecorder()
+	e.srv.Routes().ServeHTTP(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("browser code = %d, want 200", w.Code)
+	}
+	if ct := w.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
+		t.Fatalf("content-type = %q, want text/html", ct)
+	}
+	body := w.Body.String()
+	for _, want := range []string{"authorize_interaction", postAPID, postURL} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("interstitial missing %q", want)
+		}
+	}
+
+	// Fediverse software still gets the Note.
+	r = httptest.NewRequest(http.MethodGet, postAPID, nil)
+	r.Header.Set("Accept", "application/activity+json")
+	w = httptest.NewRecorder()
+	e.srv.Routes().ServeHTTP(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("AP code = %d, want 200", w.Code)
+	}
+	var note struct {
+		ID   string `json:"id"`
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &note); err != nil {
+		t.Fatal(err)
+	}
+	if note.ID != postAPID || note.Type != "Note" {
+		t.Fatalf("note = %+v", note)
 	}
 }
