@@ -39,7 +39,7 @@ fully static and is never touched.
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/api/interactions?url={post-url}` | JSON for the JS widget: array of replies (author handle/name/avatar, HTML content, timestamp, link to original) + like count + boost count. CORS `*`. Sends an `ETag` fingerprint of the response and `Cache-Control: public, no-cache`, so clients cache until the reactions change and revalidate to a `304` otherwise. Hidden/blocked replies excluded. |
+| GET | `/api/interactions?url={post-url}` | JSON for the JS widget: array of replies (author handle/name/avatar, HTML content, timestamp, link to original) + like count + boost count. CORS `*`. Sends an `ETag` fingerprint of the response plus `Cache-Control: public, max-age=0, s-maxage=30, stale-while-revalidate=300`, so Cloudflare's edge absorbs bursts (see Cloudflare-Cache.md) while browsers revalidate to a `304` and the ETag changes the moment reactions change. Hidden/blocked replies excluded. |
 
 ### Admin (bearer-token auth, used by the CLI)
 

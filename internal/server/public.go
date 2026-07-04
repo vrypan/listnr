@@ -133,10 +133,13 @@ func (s *Server) handleInteractions(w http.ResponseWriter, r *http.Request) {
 	h := w.Header()
 	h.Set("Access-Control-Allow-Origin", "*")
 	h.Set("Access-Control-Expose-Headers", "ETag")
-	// Cache until the reactions change: revalidate against the ETag instead
-	// of expiring on a timer, so an update is picked up immediately and an
-	// unchanged post costs only a 304.
-	h.Set("Cache-Control", "public, no-cache")
+	// s-maxage gives Cloudflare a short edge TTL so a burst collapses to ~one
+	// origin fetch per window; stale-while-revalidate lets the edge serve the
+	// slightly-stale copy instantly while it refreshes in the background, so
+	// the origin never sees a spike. max-age=0 keeps browsers revalidating
+	// against the ETag (cheap 304s) so the widget stays close to live. See
+	// Cloudflare-Cache.md for the Cache Rule and Tiered Cache setup this needs.
+	h.Set("Cache-Control", "public, max-age=0, s-maxage=30, stale-while-revalidate=300")
 	h.Set("ETag", etag)
 	h.Set("Content-Type", "application/json; charset=utf-8")
 	if etagMatches(r.Header.Get("If-None-Match"), etag) {
