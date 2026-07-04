@@ -39,7 +39,21 @@ host     = "ap.vrypan.net"
 name     = "vrypan.net blog"
 summary  = "Posts from vrypan.net"
 icon     = "https://blog.vrypan.net/avatar.png"
+header   = "https://blog.vrypan.net/header.jpg"
 blog_url = "https://blog.vrypan.net"
+also_known_as = ["https://mastodon.example/@vrypan"]
+
+[[actor.fields]]
+name  = "Website"
+value = "<a href=\"https://blog.vrypan.net\" rel=\"me\">blog.vrypan.net</a>"
+
+[[actor.fields]]
+name  = "RSS"
+value = "<a href=\"https://blog.vrypan.net/index.xml\">Feed</a>"
+
+[[actor.tags]]
+name = "#blogging"
+href = "https://mastodon.social/tags/blogging"
 
 [feed]
 url           = "https://blog.vrypan.net/index.xml"
@@ -61,6 +75,12 @@ Important fields:
   `@blog@vrypan.net`.
 - `actor.host` is where listnr is served. With the example above, ActivityPub
   endpoints live under `https://ap.vrypan.net`.
+- `actor.icon` is the profile avatar. `actor.header` is the optional profile
+  banner/header image.
+- `actor.fields` are Mastodon-style profile fields rendered as
+  `PropertyValue` attachments. `value` may contain HTML.
+- `actor.also_known_as` and `actor.tags` are optional profile aliases and
+  hashtags. Support varies by Fediverse server.
 - `server.data_dir` stores the SQLite database and RSA keypair. The keypair is
   generated automatically on first run.
 - `server.log_requests` enables HTTP access logs when set to `true`. It logs

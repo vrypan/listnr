@@ -112,7 +112,17 @@ host       = "ap.vrypan.net"    # where listnr is served
 name       = "vrypan.net blog"
 summary    = "..."
 icon       = "https://blog.vrypan.net/avatar.png"
+header     = "https://blog.vrypan.net/header.jpg"  # optional profile header
 blog_url   = "https://blog.vrypan.net"
+also_known_as = ["https://mastodon.example/@vrypan"]
+
+[[actor.fields]]
+name  = "Website"
+value = "<a href=\"https://blog.vrypan.net\" rel=\"me\">blog.vrypan.net</a>"
+
+[[actor.tags]]
+name = "#blogging"
+href = "https://mastodon.social/tags/blogging"
 
 [feed]
 url           = "https://blog.vrypan.net/index.xml"

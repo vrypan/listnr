@@ -16,13 +16,27 @@ type Config struct {
 }
 
 type Actor struct {
-	Username string `toml:"username"`
-	Domain   string `toml:"domain"` // handle domain, e.g. vrypan.net
-	Host     string `toml:"host"`   // where listnr is served, e.g. ap.vrypan.net
-	Name     string `toml:"name"`
-	Summary  string `toml:"summary"`
-	Icon     string `toml:"icon"`
-	BlogURL  string `toml:"blog_url"`
+	Username    string       `toml:"username"`
+	Domain      string       `toml:"domain"` // handle domain, e.g. vrypan.net
+	Host        string       `toml:"host"`   // where listnr is served, e.g. ap.vrypan.net
+	Name        string       `toml:"name"`
+	Summary     string       `toml:"summary"`
+	Icon        string       `toml:"icon"`
+	Header      string       `toml:"header"`
+	BlogURL     string       `toml:"blog_url"`
+	AlsoKnownAs []string     `toml:"also_known_as"`
+	Fields      []ActorField `toml:"fields"`
+	Tags        []ActorTag   `toml:"tags"`
+}
+
+type ActorField struct {
+	Name  string `toml:"name"`
+	Value string `toml:"value"`
+}
+
+type ActorTag struct {
+	Name string `toml:"name"`
+	Href string `toml:"href"`
 }
 
 type Feed struct {
