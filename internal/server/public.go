@@ -23,7 +23,12 @@ func (s *Server) handlePost(w http.ResponseWriter, r *http.Request) {
 		s.serveInterstitial(w, post)
 		return
 	}
-	ap.WriteJSON(w, ap.ContentType, publish.Note(s.cfg.Actor, post))
+	note := publish.Note(s.cfg.Actor, post)
+	// A standalone Note needs its own @context; Mastodon's remote fetch
+	// (e.g. via /authorize_interaction) rejects objects without one. In
+	// Create/Update fan-out the wrapping activity provides it instead.
+	note["@context"] = "https://www.w3.org/ns/activitystreams"
+	ap.WriteJSON(w, ap.ContentType, note)
 }
 
 func (s *Server) handleOutboxPage(w http.ResponseWriter, r *http.Request, total int) {

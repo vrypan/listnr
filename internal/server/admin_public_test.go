@@ -113,13 +113,18 @@ func TestPostInterstitialForBrowsers(t *testing.T) {
 		t.Fatalf("AP code = %d, want 200", w.Code)
 	}
 	var note struct {
-		ID   string `json:"id"`
-		Type string `json:"type"`
+		Context string `json:"@context"`
+		ID      string `json:"id"`
+		Type    string `json:"type"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &note); err != nil {
 		t.Fatal(err)
 	}
 	if note.ID != postAPID || note.Type != "Note" {
 		t.Fatalf("note = %+v", note)
+	}
+	// Mastodon rejects fetched objects without @context.
+	if note.Context != "https://www.w3.org/ns/activitystreams" {
+		t.Fatalf("standalone note @context = %q", note.Context)
 	}
 }
