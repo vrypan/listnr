@@ -146,14 +146,16 @@ After verification, dispatch on `type` (all responses 202 unless noted):
 | `Like` | `object` must resolve to one of our posts (see resolution below). Insert into `interactions` kind=`like` (ap_id = activity id; ignore duplicate ap_id). |
 | `Announce` | Same, kind=`boost`. |
 | `Undo` (object.type=`Like`/`Announce`) | Delete interaction by the inner object's `id`; if the inner object is just a URL string, delete by (actor, kind, post) instead. |
-| `Create` (object.type=`Note`) | If `object.inReplyTo` resolves to one of our posts: sanitize `object.content` (see below), fetch actor for name/handle/avatar, insert kind=`reply` with ap_id = the **Note's** id, content_html, published. Otherwise ignore. |
+| `Create` (object.type=`Note`) | If `object.inReplyTo` resolves to one of our posts or a stored reply on one of our posts: sanitize `object.content` (see below), fetch actor for name/handle/avatar, insert kind=`reply` with ap_id = the **Note's** id, content_html, published. Otherwise ignore. |
 | `Update` (object.type=`Note`) | If we have an interaction with that Note id and the activity actor matches its actor: update content_html/published. |
 | `Delete` | If object id (or `object.id`) matches a stored interaction of the same actor → delete it. If the object is the actor itself (actor deleted) → delete all their interactions, follower row, actor_cache row. |
 | anything else | 202, log at debug. |
 
 **Post resolution**: an incoming URL/id refers to one of our posts if it
-equals `posts.ap_id` (the Note id, `https://ap.vrypan.net/posts/<hash>`) or
-`posts.url` (the blog permalink). Implement one helper and use it everywhere.
+equals `posts.ap_id` (the Note id, `https://ap.vrypan.net/posts/<hash>`),
+`posts.url` (the blog permalink), or a stored reply's `interactions.ap_id`.
+The stored-reply case lets replies-to-replies attach to the original post.
+Implement one helper and use it everywhere.
 
 **HTML sanitization**: use `github.com/microcosm-cc/bluemonday` with
 `UGCPolicy()`. Sanitize on write (store clean HTML). Never store or serve

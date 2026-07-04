@@ -63,11 +63,16 @@ func (s *Store) UpdateInteractionContent(apID, actorID, contentHTML, published s
 }
 
 // ResolvePost maps a URL/id from an incoming activity to a local post: it
-// matches either the post's ActivityPub Note id or its blog permalink.
+// matches either the post's ActivityPub Note id, its blog permalink, or a
+// stored reply Note id that already belongs to that post.
 // Returns (0, false) when the URL is not one of our posts.
 func (s *Store) ResolvePost(url string) (int64, bool, error) {
 	var id int64
-	err := s.DB.QueryRow(`SELECT id FROM posts WHERE ap_id = ? OR url = ?`, url, url).Scan(&id)
+	err := s.DB.QueryRow(`
+		SELECT id FROM posts WHERE ap_id = ? OR url = ?
+		UNION
+		SELECT post_id FROM interactions WHERE kind = 'reply' AND ap_id = ?
+		LIMIT 1`, url, url, url).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, false, nil
 	}

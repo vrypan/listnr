@@ -62,7 +62,7 @@ fully static and is never touched.
 | `Undo(Follow)` | Remove follower. |
 | `Like` / `Announce` on a known post | Store as interaction. |
 | `Undo(Like/Announce)` | Remove the stored interaction. |
-| `Create(Note)` with `inReplyTo` = a known post URL or Note id | Store as reply (fetch actor profile for name/avatar; sanitize HTML). |
+| `Create(Note)` with `inReplyTo` = a known post URL, Note id, or stored reply Note id | Store as reply (fetch actor profile for name/avatar; sanitize HTML). Replies to stored replies are attached to the original post. |
 | `Delete` | Remove matching stored interactions; if actor-level, drop everything from that actor. |
 | `Update(Note)` | Update stored reply content. |
 | Anything else | 202, ignore. |

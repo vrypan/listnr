@@ -293,6 +293,39 @@ func TestReplyToUnknownPostIgnored(t *testing.T) {
 	}
 }
 
+func TestReplyToStoredReplyUsesOriginalPost(t *testing.T) {
+	e := newTestEnv(t)
+	first := map[string]any{
+		"id": "https://remote.example/c/1", "type": "Create", "actor": remoteActorID,
+		"object": map[string]any{
+			"id":        "https://remote.example/notes/1",
+			"type":      "Note",
+			"inReplyTo": postAPID,
+			"content":   "first",
+		},
+	}
+	second := map[string]any{
+		"id": "https://remote.example/c/2", "type": "Create", "actor": remoteActorID,
+		"object": map[string]any{
+			"id":        "https://remote.example/notes/2",
+			"type":      "Note",
+			"inReplyTo": "https://remote.example/notes/1",
+			"content":   "nested",
+		},
+	}
+	for _, a := range []map[string]any{first, second} {
+		if code := e.post(t, a); code != http.StatusAccepted {
+			t.Fatalf("%s: code %d", a["id"], code)
+		}
+	}
+	if n := e.count(t, `SELECT COUNT(*) FROM interactions WHERE kind='reply'`); n != 2 {
+		t.Fatalf("replies = %d, want 2", n)
+	}
+	if n := e.count(t, `SELECT COUNT(*) FROM interactions WHERE post_id = (SELECT id FROM posts WHERE ap_id = ?)`, postAPID); n != 2 {
+		t.Fatalf("replies on original post = %d, want 2", n)
+	}
+}
+
 func TestUnsignedAndBadSignatureRejected(t *testing.T) {
 	e := newTestEnv(t)
 

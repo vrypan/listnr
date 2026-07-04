@@ -189,15 +189,24 @@ Use `docs/widget.js` to render Fediverse interactions on static post pages:
 <script src="/path/to/widget.js" data-endpoint="https://ap.vrypan.net"></script>
 ```
 
+To pin the post URL explicitly:
+
+```html
+<script
+  src="/path/to/widget.js"
+  data-endpoint="https://ap.vrypan.net"
+  data-url="https://blog.vrypan.net/2026/07/example/"></script>
+```
+
 The widget fetches:
 
 ```text
-https://ap.vrypan.net/api/interactions?url=<current-page-url>
+https://ap.vrypan.net/api/interactions?url=<post-url>
 ```
 
-It strips query strings and fragments from the current page URL before making
-the request. Replies are sanitized on the server before they are stored and
-served.
+It uses `data-url` when present and falls back to the current page URL. It
+strips query strings and fragments before making the request. Replies are
+sanitized on the server before they are stored and served.
 
 ## Deployment
 

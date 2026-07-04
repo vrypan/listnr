@@ -3,7 +3,7 @@
   var endpoint = script && script.dataset.endpoint;
   if (!endpoint) return;
 
-  var postURL = new URL(window.location.href);
+  var postURL = new URL(script.dataset.url || window.location.href);
   postURL.hash = "";
   postURL.search = "";
 
@@ -52,4 +52,3 @@
     })
     .catch(function () {});
 })();
-
