@@ -410,6 +410,61 @@ func TestDeleteForGoneActorPurges(t *testing.T) {
 	}
 }
 
+// A Delete signed with a gone key from a *different* host must not be able to
+// purge an actor: keyId is attacker-controlled and only needs to 404.
+func TestDeleteForGoneActorRejectsForeignKey(t *testing.T) {
+	e := newTestEnv(t)
+	if code := e.post(t, follow("https://remote.example/f/1")); code != http.StatusAccepted {
+		t.Fatal("setup follow failed")
+	}
+	foreignKey := "https://evil.example/key"
+	e.fetcher.gone[foreignKey] = true
+
+	body, _ := json.Marshal(map[string]any{
+		"id": "https://evil.example/d/9", "type": "Delete",
+		"actor": remoteActorID, "object": remoteActorID,
+	})
+	r := httptest.NewRequest("POST", "https://ap.vrypan.net/inbox", bytes.NewReader(body))
+	r.Header.Set("Content-Type", "application/activity+json")
+	key, _ := rsa.GenerateKey(rand.Reader, 2048)
+	httpsig.Sign(r, body, key, foreignKey)
+	w := httptest.NewRecorder()
+	e.srv.handleInbox(w, r)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("foreign-key delete: code %d, want 401", w.Code)
+	}
+	if n := e.count(t, `SELECT COUNT(*) FROM followers`); n != 1 {
+		t.Fatalf("followers = %d, want 1 (purge must not happen)", n)
+	}
+}
+
+// A gone key must not authorize deleting a single interaction (object != actor);
+// only an actor deleting itself may pass through the unverifiable path.
+func TestDeleteForGoneActorRejectsNonActorObject(t *testing.T) {
+	e := newTestEnv(t)
+	if code := e.post(t, follow("https://remote.example/f/1")); code != http.StatusAccepted {
+		t.Fatal("setup follow failed")
+	}
+	e.fetcher.gone[remoteActorID] = true
+
+	body, _ := json.Marshal(map[string]any{
+		"id": "https://remote.example/d/9", "type": "Delete",
+		"actor": remoteActorID, "object": "https://remote.example/notes/1",
+	})
+	r := httptest.NewRequest("POST", "https://ap.vrypan.net/inbox", bytes.NewReader(body))
+	r.Header.Set("Content-Type", "application/activity+json")
+	key, _ := rsa.GenerateKey(rand.Reader, 2048)
+	httpsig.Sign(r, body, key, remoteKeyID)
+	w := httptest.NewRecorder()
+	e.srv.handleInbox(w, r)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("non-actor delete: code %d, want 401", w.Code)
+	}
+	if n := e.count(t, `SELECT COUNT(*) FROM followers`); n != 1 {
+		t.Fatalf("followers = %d, want 1 (purge must not happen)", n)
+	}
+}
+
 func TestBlockMatching(t *testing.T) {
 	cases := []struct {
 		pattern, actor string

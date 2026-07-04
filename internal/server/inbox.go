@@ -6,6 +6,8 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/vrypan/listnr/internal/fedi"
@@ -124,7 +126,16 @@ func (s *Server) verify(ctx context.Context, w http.ResponseWriter, r *http.Requ
 
 	keyActor, err := s.fetch.FetchActor(ctx, sig.KeyID, false)
 	if errors.Is(err, fedi.ErrGone) {
-		if env.Type == "Delete" && env.Actor != "" {
+		// The signing key is gone, so we can't verify anything. The only
+		// activity we honor here is an actor deleting itself: a Delete
+		// whose object IS the actor, where the (now-gone) key belongs to
+		// that same actor. Anything else is refused — otherwise anyone
+		// could purge an arbitrary actor by pointing keyId at a URL that
+		// 404s.
+		obj, _ := decodeObject(env.Object)
+		if env.Type == "Delete" && env.Actor != "" &&
+			obj != nil && obj.ID == string(env.Actor) &&
+			sameHost(sig.KeyID, string(env.Actor)) {
 			s.st.PurgeActor(string(env.Actor))
 			w.WriteHeader(http.StatusAccepted)
 		} else {
@@ -315,6 +326,20 @@ func publishedOrNow(published string) string {
 		return published
 	}
 	return time.Now().UTC().Format(time.RFC3339)
+}
+
+// sameHost reports whether two URLs share a (case-insensitive) host. Used to
+// confirm a gone signing key belongs to the actor it claims to delete.
+func sameHost(a, b string) bool {
+	ua, err := url.Parse(a)
+	if err != nil || ua.Host == "" {
+		return false
+	}
+	ub, err := url.Parse(b)
+	if err != nil || ub.Host == "" {
+		return false
+	}
+	return strings.EqualFold(ua.Host, ub.Host)
 }
 
 // mustMarshalEnvelope re-serializes the received activity for embedding in
