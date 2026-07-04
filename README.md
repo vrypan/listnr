@@ -193,3 +193,7 @@ See `deploy/README.md` for a compact deployment checklist.
 - Inbox handlers return `202 Accepted` for ignored or blocked activities.
 - The project uses `modernc.org/sqlite`, so builds must keep working with
   `CGO_ENABLED=0`.
+
+## License
+
+MIT. See `LICENSE`.
