@@ -109,6 +109,7 @@ actor_cache  (actor_id, public_key_pem, name, handle, icon_url, fetched_at)
 username   = "blog"
 domain     = "vrypan.net"       # handle domain
 host       = "ap.vrypan.net"    # where listnr is served
+type       = "Service"          # optional; Service/Application signal automation
 name       = "vrypan.net blog"
 summary    = "..."
 icon       = "https://blog.vrypan.net/avatar.png"
@@ -123,6 +124,11 @@ value = "<a href=\"https://blog.vrypan.net\" rel=\"me\">blog.vrypan.net</a>"
 [[actor.tags]]
 name = "#blogging"
 href = "https://mastodon.social/tags/blogging"
+
+[actor.extra]                  # optional raw actor JSON properties
+discoverable = true
+indexable = true
+manuallyApprovesFollowers = false
 
 [feed]
 url           = "https://blog.vrypan.net/index.xml"

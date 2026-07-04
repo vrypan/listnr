@@ -36,6 +36,7 @@ Create `listnr.toml`:
 username = "blog"
 domain   = "vrypan.net"
 host     = "ap.vrypan.net"
+type     = "Service"
 name     = "vrypan.net blog"
 summary  = "Posts from vrypan.net"
 icon     = "https://blog.vrypan.net/avatar.png"
@@ -54,6 +55,11 @@ value = "<a href=\"https://blog.vrypan.net/index.xml\">Feed</a>"
 [[actor.tags]]
 name = "#blogging"
 href = "https://mastodon.social/tags/blogging"
+
+[actor.extra]
+discoverable = true
+indexable = true
+manuallyApprovesFollowers = false
 
 [feed]
 url           = "https://blog.vrypan.net/index.xml"
@@ -75,12 +81,18 @@ Important fields:
   `@blog@vrypan.net`.
 - `actor.host` is where listnr is served. With the example above, ActivityPub
   endpoints live under `https://ap.vrypan.net`.
+- `actor.type` controls the ActivityPub actor type. Use `Service` to signal an
+  automated account to Mastodon-compatible servers; the default is `Person`.
 - `actor.icon` is the profile avatar. `actor.header` is the optional profile
   banner/header image.
 - `actor.fields` are Mastodon-style profile fields rendered as
   `PropertyValue` attachments. `value` may contain HTML.
 - `actor.also_known_as` and `actor.tags` are optional profile aliases and
   hashtags. Support varies by Fediverse server.
+- `actor.extra` is an advanced escape hatch: keys under `[actor.extra]` are
+  copied directly into the actor JSON. This lets you add Fediverse extensions
+  without recompiling listnr. Use it carefully, because these values are
+  emitted as-is.
 - `server.data_dir` stores the SQLite database and RSA keypair. The keypair is
   generated automatically on first run.
 - `server.log_requests` enables HTTP access logs when set to `true`. It logs

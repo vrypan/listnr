@@ -16,17 +16,19 @@ type Config struct {
 }
 
 type Actor struct {
-	Username    string       `toml:"username"`
-	Domain      string       `toml:"domain"` // handle domain, e.g. vrypan.net
-	Host        string       `toml:"host"`   // where listnr is served, e.g. ap.vrypan.net
-	Name        string       `toml:"name"`
-	Summary     string       `toml:"summary"`
-	Icon        string       `toml:"icon"`
-	Header      string       `toml:"header"`
-	BlogURL     string       `toml:"blog_url"`
-	AlsoKnownAs []string     `toml:"also_known_as"`
-	Fields      []ActorField `toml:"fields"`
-	Tags        []ActorTag   `toml:"tags"`
+	Username    string         `toml:"username"`
+	Domain      string         `toml:"domain"` // handle domain, e.g. vrypan.net
+	Host        string         `toml:"host"`   // where listnr is served, e.g. ap.vrypan.net
+	Type        string         `toml:"type"`
+	Name        string         `toml:"name"`
+	Summary     string         `toml:"summary"`
+	Icon        string         `toml:"icon"`
+	Header      string         `toml:"header"`
+	BlogURL     string         `toml:"blog_url"`
+	AlsoKnownAs []string       `toml:"also_known_as"`
+	Fields      []ActorField   `toml:"fields"`
+	Tags        []ActorTag     `toml:"tags"`
+	Extra       map[string]any `toml:"extra"`
 }
 
 type ActorField struct {

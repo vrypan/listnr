@@ -20,6 +20,10 @@ type Handler struct {
 
 func (h *Handler) actorDoc() map[string]any {
 	id := h.Actor.ID()
+	actorType := h.Actor.Type
+	if actorType == "" {
+		actorType = "Person"
+	}
 	context := []any{
 		"https://www.w3.org/ns/activitystreams",
 		"https://w3id.org/security/v1",
@@ -34,7 +38,7 @@ func (h *Handler) actorDoc() map[string]any {
 	doc := map[string]any{
 		"@context":          context,
 		"id":                id,
-		"type":              "Person",
+		"type":              actorType,
 		"preferredUsername": h.Actor.Username,
 		"name":              h.Actor.Name,
 		"summary":           h.Actor.Summary,
@@ -66,6 +70,9 @@ func (h *Handler) actorDoc() map[string]any {
 	}
 	if tags := actorTags(h.Actor.Tags); len(tags) > 0 {
 		doc["tag"] = tags
+	}
+	for k, v := range h.Actor.Extra {
+		doc[k] = v
 	}
 	return doc
 }

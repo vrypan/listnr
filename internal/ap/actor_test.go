@@ -11,6 +11,7 @@ func TestActorDocOptionalProfileProperties(t *testing.T) {
 		Username:    "blog",
 		Domain:      "vrypan.net",
 		Host:        "ap.vrypan.net",
+		Type:        "Service",
 		Name:        "Blog",
 		BlogURL:     "https://blog.vrypan.net",
 		Icon:        "https://blog.vrypan.net/avatar.png",
@@ -24,8 +25,15 @@ func TestActorDocOptionalProfileProperties(t *testing.T) {
 			{Name: "#blogging", Href: "https://mastodon.social/tags/blogging"},
 			{Name: ""},
 		},
+		Extra: map[string]any{
+			"discoverable":              true,
+			"manuallyApprovesFollowers": false,
+		},
 	}}
 	doc := h.actorDoc()
+	if got := doc["type"]; got != "Service" {
+		t.Fatalf("type = %q, want Service", got)
+	}
 	if _, ok := doc["image"]; !ok {
 		t.Fatal("actor doc missing image")
 	}
@@ -39,5 +47,8 @@ func TestActorDocOptionalProfileProperties(t *testing.T) {
 	tags := doc["tag"].([]map[string]any)
 	if len(tags) != 1 || tags[0]["type"] != "Hashtag" || tags[0]["name"] != "#blogging" {
 		t.Fatalf("bad tags: %#v", tags)
+	}
+	if doc["discoverable"] != true || doc["manuallyApprovesFollowers"] != false {
+		t.Fatalf("extra actor properties missing: %#v", doc)
 	}
 }
