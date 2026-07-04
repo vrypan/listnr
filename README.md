@@ -144,7 +144,7 @@ Common commands:
 
 ```sh
 listnr stats
-listnr poll
+listnr refresh   # tell the server to fetch the RSS feed now (alias: poll)
 
 listnr replies list
 listnr replies list --post https://blog.vrypan.net/post/

@@ -46,7 +46,12 @@ func init() {
 
 	rootCmd.AddCommand(replies, block, followers)
 	rootCmd.AddCommand(&cobra.Command{Use: "stats", RunE: runStats})
-	rootCmd.AddCommand(&cobra.Command{Use: "poll", RunE: runPoll})
+	rootCmd.AddCommand(&cobra.Command{
+		Use:     "refresh",
+		Aliases: []string{"poll"},
+		Short:   "Tell the running server to fetch the RSS feed now",
+		RunE:    runPoll,
+	})
 }
 
 func replyAction(action string) *cobra.Command {

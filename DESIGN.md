@@ -156,7 +156,7 @@ listnr replies hide|unhide|delete <id>
 listnr block add|rm|list <actor-or-domain>
 listnr followers list [--rm <id>]
 listnr stats
-listnr poll          # force feed refresh now
+listnr refresh       # tell the server to fetch the RSS feed now (alias: poll)
 listnr keygen        # (first-run helper, normally automatic)
 ```
 
