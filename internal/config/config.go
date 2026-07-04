@@ -32,8 +32,9 @@ type Feed struct {
 }
 
 type Server struct {
-	Listen  string `toml:"listen"`
-	DataDir string `toml:"data_dir"`
+	Listen      string `toml:"listen"`
+	DataDir     string `toml:"data_dir"`
+	LogRequests bool   `toml:"log_requests"`
 }
 
 type Admin struct {

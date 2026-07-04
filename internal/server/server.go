@@ -66,6 +66,9 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
+	if s.cfg.Server.LogRequests {
+		return s.logRequests(mux)
+	}
 	return mux
 }
 
