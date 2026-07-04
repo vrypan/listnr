@@ -84,8 +84,10 @@ func TestEndToEndFollow(t *testing.T) {
 	ourKey, _ := rsa.GenerateKey(rand.Reader, 2048)
 	keyID := cfg.Actor.ID() + "#main-key"
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	client := fedi.NewClient(st, ourKey, keyID)
-	queue := delivery.NewQueue(st, ourKey, keyID, log)
+	// Plain client: the fake remote runs on loopback, which the production
+	// SSRF guard would refuse.
+	client := fedi.NewClient(st, ourKey, keyID, http.DefaultClient)
+	queue := delivery.NewQueue(st, ourKey, keyID, log, http.DefaultClient)
 	srv := New(cfg, st, &ap.Handler{Actor: cfg.Actor}, client, queue, log)
 
 	body, _ := json.Marshal(map[string]any{

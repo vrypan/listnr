@@ -45,8 +45,8 @@ var serveCmd = &cobra.Command{
 		defer st.Close()
 
 		keyID := cfg.Actor.ID() + "#main-key"
-		fetcher := fedi.NewClient(st, key, keyID)
-		queue := delivery.NewQueue(st, key, keyID, log)
+		fetcher := fedi.NewClient(st, key, keyID, nil)
+		queue := delivery.NewQueue(st, key, keyID, log, nil)
 
 		ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
@@ -59,7 +59,15 @@ var serveCmd = &cobra.Command{
 		poller := feed.NewPoller(cfg, st, queue, log)
 		srv.SetPollFunc(poller.Trigger)
 		go poller.Run(ctx)
-		httpSrv := &http.Server{Addr: cfg.Server.Listen, Handler: srv.Routes()}
+		httpSrv := &http.Server{
+			Addr:              cfg.Server.Listen,
+			Handler:           srv.Routes(),
+			ReadHeaderTimeout: 10 * time.Second,
+			ReadTimeout:       30 * time.Second,
+			WriteTimeout:      30 * time.Second,
+			IdleTimeout:       120 * time.Second,
+			MaxHeaderBytes:    1 << 20,
+		}
 
 		log.Info("listnr starting",
 			"handle", "@"+cfg.Actor.Handle(),

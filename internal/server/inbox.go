@@ -87,11 +87,10 @@ func (s *Server) handleInbox(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	actor, ok := s.verify(ctx, w, r, body, &env)
-	if !ok {
-		return // response already written
-	}
-
+	// Drop blocked actors before verifying, so a blocked instance can't make
+	// us emit an outbound key-fetch on every message. verify() later pins the
+	// activity actor to the signing-key owner, so env.Actor is authoritative
+	// for anything that gets dispatched.
 	blocked, err := s.st.IsBlocked(string(env.Actor))
 	if err != nil {
 		s.log.Error("block check failed", "err", err)
@@ -104,10 +103,36 @@ func (s *Server) handleInbox(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	actor, ok := s.verify(ctx, w, r, body, &env)
+	if !ok {
+		return // response already written
+	}
+
+	// Reject replays of an already-processed activity. Checked after verify
+	// so an attacker can't evict a pending id with an unsigned request.
+	if env.ID != "" {
+		seen, err := s.st.ActivitySeen(env.ID)
+		if err != nil {
+			s.log.Error("replay check failed", "err", err)
+			http.Error(w, "server error", http.StatusInternalServerError)
+			return
+		}
+		if seen {
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+	}
+
 	if err := s.dispatch(ctx, &env, actor); err != nil {
 		s.log.Error("inbox dispatch failed", "type", env.Type, "actor", env.Actor, "err", err)
 		http.Error(w, "server error", http.StatusInternalServerError)
 		return
+	}
+	// Mark seen only after success, so a transient failure can be retried.
+	if env.ID != "" {
+		if err := s.st.MarkActivitySeen(env.ID); err != nil {
+			s.log.Warn("recording seen activity failed", "id", env.ID, "err", err)
+		}
 	}
 	w.WriteHeader(http.StatusAccepted)
 }

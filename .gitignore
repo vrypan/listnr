@@ -4,3 +4,4 @@ listnr
 *.db-wal
 *.pem
 listnr.toml
+listnr-do

@@ -465,6 +465,33 @@ func TestDeleteForGoneActorRejectsNonActorObject(t *testing.T) {
 	}
 }
 
+// A captured, validly-signed activity replayed after processing must be
+// dropped. Deleting the stored row first distinguishes replay rejection from
+// the INSERT-OR-IGNORE dedup: if the replay were processed, it would
+// re-insert.
+func TestReplayedActivityDropped(t *testing.T) {
+	e := newTestEnv(t)
+	like := map[string]any{
+		"id": "https://remote.example/l/replay", "type": "Like",
+		"actor": remoteActorID, "object": postAPID,
+	}
+	if code := e.post(t, like); code != http.StatusAccepted {
+		t.Fatalf("first delivery: code %d", code)
+	}
+	if n := e.count(t, `SELECT COUNT(*) FROM interactions WHERE kind='like'`); n != 1 {
+		t.Fatalf("likes = %d, want 1", n)
+	}
+	if _, err := e.st.DB.Exec(`DELETE FROM interactions`); err != nil {
+		t.Fatal(err)
+	}
+	if code := e.post(t, like); code != http.StatusAccepted {
+		t.Fatalf("replay: code %d", code)
+	}
+	if n := e.count(t, `SELECT COUNT(*) FROM interactions WHERE kind='like'`); n != 0 {
+		t.Fatalf("likes after replay = %d, want 0 (replay must be dropped)", n)
+	}
+}
+
 func TestBlockMatching(t *testing.T) {
 	cases := []struct {
 		pattern, actor string

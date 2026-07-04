@@ -385,3 +385,13 @@ Implemented in `internal/server/public.go`, `internal/server/admin.go`, and
 - Never fan out during first-run backfill.
 - `db.SetMaxOpenConns(1)` stays.
 - Additive schema migrations only; never drop/rewrite existing tables.
+- The gone-key Delete path (inbox.go) only accepts an actor deleting *itself*
+  (object == actor, key host == actor host). Do not loosen it — keyId is
+  attacker-controlled, so a broader rule lets anyone purge any actor.
+- Outbound federation fetches/deliveries use `safehttp.Client`, which refuses
+  to dial private/loopback/link-local/metadata IPs (SSRF guard). Inbox URLs
+  are attacker-supplied; do not swap in a plain `http.Client`. Tests pass an
+  explicit plain client because they talk to loopback httptest servers.
+- Inbox activities are de-duplicated by `id` (seen_activities table) to reject
+  replays; ids are marked seen only after a successful dispatch, and pruned
+  after ~2h (just past the 1h signature clock-skew window).

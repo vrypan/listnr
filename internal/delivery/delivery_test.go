@@ -29,7 +29,9 @@ func newQueue(t *testing.T) (*Queue, *store.Store, *rsa.PrivateKey) {
 		t.Fatal(err)
 	}
 	log := slogDiscard()
-	return NewQueue(st, key, "https://ap.vrypan.net/actor#main-key", log), st, key
+	// Plain client: tests talk to httptest servers on loopback, which the
+	// production SSRF guard would refuse.
+	return NewQueue(st, key, "https://ap.vrypan.net/actor#main-key", log, http.DefaultClient), st, key
 }
 
 func TestDeliverySignedAndMarkedDone(t *testing.T) {

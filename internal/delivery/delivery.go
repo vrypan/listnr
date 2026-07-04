@@ -14,6 +14,7 @@ import (
 
 	"github.com/vrypan/listnr/internal/fedi"
 	"github.com/vrypan/listnr/internal/httpsig"
+	"github.com/vrypan/listnr/internal/safehttp"
 	"github.com/vrypan/listnr/internal/store"
 )
 
@@ -21,9 +22,12 @@ const (
 	tickInterval    = 10 * time.Second
 	cleanupInterval = time.Hour
 	cleanupMaxAge   = 30 * 24 * time.Hour
-	batchSize       = 20
-	postTimeout     = 10 * time.Second
-	contentType     = "application/activity+json"
+	// seenMaxAge outlives the signature clock-skew window (httpsig.MaxClockSkew
+	// is 1h), after which a captured request can no longer be replayed.
+	seenMaxAge  = 2 * time.Hour
+	batchSize   = 20
+	postTimeout = 10 * time.Second
+	contentType = "application/activity+json"
 )
 
 // backoffSchedule[n] is the delay after the (n+1)-th failed attempt; a
@@ -41,12 +45,18 @@ type Queue struct {
 	log   *slog.Logger
 }
 
-func NewQueue(st *store.Store, key *rsa.PrivateKey, keyID string, log *slog.Logger) *Queue {
+// NewQueue builds the delivery queue. Pass httpClient to override the
+// transport (tests use a loopback-capable one); nil selects the default
+// SSRF-guarded client.
+func NewQueue(st *store.Store, key *rsa.PrivateKey, keyID string, log *slog.Logger, httpClient *http.Client) *Queue {
+	if httpClient == nil {
+		httpClient = safehttp.Client(postTimeout)
+	}
 	return &Queue{
 		st:    st,
 		key:   key,
 		keyID: keyID,
-		http:  &http.Client{Timeout: postTimeout},
+		http:  httpClient,
 		log:   log,
 	}
 }
@@ -86,6 +96,9 @@ func (q *Queue) Run(ctx context.Context) {
 		case <-cleanup.C:
 			if err := q.st.CleanupDeliveries(cleanupMaxAge); err != nil {
 				q.log.Error("delivery cleanup failed", "err", err)
+			}
+			if err := q.st.CleanupSeenActivities(seenMaxAge); err != nil {
+				q.log.Error("seen-activity cleanup failed", "err", err)
 			}
 		}
 	}

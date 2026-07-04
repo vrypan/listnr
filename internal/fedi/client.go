@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/vrypan/listnr/internal/httpsig"
+	"github.com/vrypan/listnr/internal/safehttp"
 	"github.com/vrypan/listnr/internal/store"
 )
 
@@ -47,9 +48,15 @@ type Client struct {
 	keyID string
 }
 
-func NewClient(st *store.Store, key *rsa.PrivateKey, keyID string) *Client {
+// NewClient builds an outbound federation client. Pass httpClient to override
+// the transport (tests use a loopback-capable one); nil selects the default
+// SSRF-guarded client.
+func NewClient(st *store.Store, key *rsa.PrivateKey, keyID string, httpClient *http.Client) *Client {
+	if httpClient == nil {
+		httpClient = safehttp.Client(fetchTimeout)
+	}
 	return &Client{
-		http:  &http.Client{Timeout: fetchTimeout},
+		http:  httpClient,
 		st:    st,
 		key:   key,
 		keyID: keyID,

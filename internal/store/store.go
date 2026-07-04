@@ -80,6 +80,12 @@ CREATE TABLE IF NOT EXISTS state (
 	key   TEXT PRIMARY KEY,
 	value TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS seen_activities (
+	activity_id TEXT PRIMARY KEY,
+	seen_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+);
+CREATE INDEX IF NOT EXISTS idx_seen_activities_seen ON seen_activities(seen_at);
 `
 
 type Store struct {
