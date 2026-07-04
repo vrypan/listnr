@@ -307,13 +307,18 @@ Implemented in `internal/server/public.go`, `internal/server/admin.go`, and
                  "avatar": "<icon url>"},
       "content_html": "<sanitized html>",
       "published": "2026-07-04T10:00:00Z",
-      "url": "<the reply Note's id>"
+      "url": "<the reply Note's id>",
+      "in_reply_to": "<the Note's raw inReplyTo>"
     }
   ]
 }
 ```
 
 - Excludes `hidden=1`. Replies sorted oldest first.
+- `in_reply_to` lets the widget thread nested replies: when it equals
+  another reply's `url`, the reply is a child of that reply; otherwise
+  it is a top-level reply to the post. Replies stored before the column
+  existed have `""`.
 
 ### Admin API
 

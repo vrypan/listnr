@@ -324,6 +324,14 @@ func TestReplyToStoredReplyUsesOriginalPost(t *testing.T) {
 	if n := e.count(t, `SELECT COUNT(*) FROM interactions WHERE post_id = (SELECT id FROM posts WHERE ap_id = ?)`, postAPID); n != 2 {
 		t.Fatalf("replies on original post = %d, want 2", n)
 	}
+	// Each reply keeps its raw inReplyTo so the widget can thread them:
+	// the nested reply's in_reply_to equals the first reply's ap_id.
+	if n := e.count(t, `SELECT COUNT(*) FROM interactions WHERE ap_id='https://remote.example/notes/2' AND in_reply_to='https://remote.example/notes/1'`); n != 1 {
+		t.Fatalf("nested reply in_reply_to not stored")
+	}
+	if n := e.count(t, `SELECT COUNT(*) FROM interactions WHERE ap_id='https://remote.example/notes/1' AND in_reply_to=?`, postAPID); n != 1 {
+		t.Fatalf("top-level reply in_reply_to not stored")
+	}
 }
 
 func TestUnsignedAndBadSignatureRejected(t *testing.T) {

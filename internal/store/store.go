@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"path/filepath"
+	"strings"
 
 	_ "modernc.org/sqlite"
 )
@@ -39,6 +40,7 @@ CREATE TABLE IF NOT EXISTS interactions (
 	actor_name     TEXT NOT NULL DEFAULT '',
 	actor_icon_url TEXT NOT NULL DEFAULT '',
 	content_html   TEXT NOT NULL DEFAULT '',
+	in_reply_to    TEXT NOT NULL DEFAULT '',
 	published_at   TEXT NOT NULL DEFAULT '',
 	received_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
 	hidden         INTEGER NOT NULL DEFAULT 0
@@ -96,7 +98,25 @@ func Open(dataDir string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
+	if err := migrate(db); err != nil {
+		db.Close()
+		return nil, err
+	}
 	return &Store{DB: db}, nil
+}
+
+// migrate applies additive column changes to databases created before the
+// column existed in the schema above. Each statement must be safe to re-run:
+// a "duplicate column name" error means the column is already there.
+func migrate(db *sql.DB) error {
+	for _, stmt := range []string{
+		`ALTER TABLE interactions ADD COLUMN in_reply_to TEXT NOT NULL DEFAULT ''`,
+	} {
+		if _, err := db.Exec(stmt); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Store) Close() error { return s.DB.Close() }

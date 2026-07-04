@@ -274,6 +274,7 @@ func (s *Server) handleCreate(env *envelope, obj *object, actor *fedi.Actor) err
 		ActorName:    actor.Name,
 		ActorIconURL: actor.IconURL,
 		ContentHTML:  s.sanitize.Sanitize(obj.Content),
+		InReplyTo:    string(obj.InReplyTo),
 		Published:    publishedOrNow(obj.Published),
 	})
 	if err == nil {

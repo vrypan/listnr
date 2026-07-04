@@ -15,6 +15,7 @@ type Interaction struct {
 	ActorName    string `json:"actor_name"`
 	ActorIconURL string `json:"actor_icon_url"`
 	ContentHTML  string `json:"content_html"`
+	InReplyTo    string `json:"in_reply_to"`
 	Published    string `json:"published"`
 	ReceivedAt   string `json:"received_at"`
 	Hidden       bool   `json:"hidden"`
@@ -26,10 +27,10 @@ func (s *Store) InsertInteraction(i *Interaction) (bool, error) {
 	res, err := s.DB.Exec(`
 		INSERT OR IGNORE INTO interactions
 			(ap_id, kind, post_id, actor_id, actor_handle, actor_name,
-			 actor_icon_url, content_html, published_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			 actor_icon_url, content_html, in_reply_to, published_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		i.APID, i.Kind, i.PostID, i.ActorID, i.ActorHandle, i.ActorName,
-		i.ActorIconURL, i.ContentHTML, i.Published)
+		i.ActorIconURL, i.ContentHTML, i.InReplyTo, i.Published)
 	if err != nil {
 		return false, err
 	}
@@ -85,8 +86,8 @@ func (s *Store) ResolvePost(url string) (int64, bool, error) {
 func (s *Store) ListReplies(postURL string, hiddenOnly bool) ([]Interaction, error) {
 	query := `
 		SELECT i.id, i.ap_id, i.kind, i.post_id, i.actor_id, i.actor_handle,
-		       i.actor_name, i.actor_icon_url, i.content_html, i.published_at,
-		       i.received_at, i.hidden
+		       i.actor_name, i.actor_icon_url, i.content_html, i.in_reply_to,
+		       i.published_at, i.received_at, i.hidden
 		FROM interactions i
 		JOIN posts p ON p.id = i.post_id
 		WHERE i.kind = 'reply'`
@@ -137,7 +138,8 @@ func (s *Store) InteractionCounts() (map[string]int, error) {
 func (s *Store) VisibleInteractionsForPost(postID int64) ([]Interaction, error) {
 	return s.scanInteractions(`
 		SELECT id, ap_id, kind, post_id, actor_id, actor_handle, actor_name,
-		       actor_icon_url, content_html, published_at, received_at, hidden
+		       actor_icon_url, content_html, in_reply_to, published_at,
+		       received_at, hidden
 		FROM interactions
 		WHERE post_id = ? AND hidden = 0
 		ORDER BY CASE kind WHEN 'reply' THEN published_at ELSE received_at END ASC, id ASC`, postID)
@@ -155,7 +157,7 @@ func (s *Store) scanInteractions(query string, args ...any) ([]Interaction, erro
 		var hidden int
 		if err := rows.Scan(&i.ID, &i.APID, &i.Kind, &i.PostID, &i.ActorID,
 			&i.ActorHandle, &i.ActorName, &i.ActorIconURL, &i.ContentHTML,
-			&i.Published, &i.ReceivedAt, &hidden); err != nil {
+			&i.InReplyTo, &i.Published, &i.ReceivedAt, &hidden); err != nil {
 			return nil, err
 		}
 		i.Hidden = hidden != 0

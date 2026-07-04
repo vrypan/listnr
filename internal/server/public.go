@@ -103,6 +103,7 @@ func (s *Server) handleInteractions(w http.ResponseWriter, r *http.Request) {
 				"content_html": in.ContentHTML,
 				"published":    in.Published,
 				"url":          in.APID,
+				"in_reply_to":  in.InReplyTo,
 			})
 		}
 	}
