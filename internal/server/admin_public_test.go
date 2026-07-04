@@ -76,6 +76,51 @@ func TestInteractionsPayloadExcludesHidden(t *testing.T) {
 	}
 }
 
+func TestInteractionsETagRevalidation(t *testing.T) {
+	e := newTestEnv(t)
+	postID, _, _ := e.st.ResolvePost(postURL)
+
+	get := func(ifNoneMatch string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodGet, "https://ap.vrypan.net/api/interactions?url="+postURL, nil)
+		if ifNoneMatch != "" {
+			r.Header.Set("If-None-Match", ifNoneMatch)
+		}
+		w := httptest.NewRecorder()
+		e.srv.Routes().ServeHTTP(w, r)
+		return w
+	}
+
+	first := get("")
+	if first.Code != http.StatusOK {
+		t.Fatalf("first: code %d", first.Code)
+	}
+	etag := first.Header().Get("ETag")
+	if etag == "" {
+		t.Fatal("no ETag header")
+	}
+
+	// Same state → conditional request revalidates to 304 with no body.
+	second := get(etag)
+	if second.Code != http.StatusNotModified {
+		t.Fatalf("revalidate: code %d, want 304", second.Code)
+	}
+	if second.Body.Len() != 0 {
+		t.Fatalf("304 body = %q, want empty", second.Body.String())
+	}
+
+	// A new reaction must change the ETag and stop matching the old one.
+	if _, err := e.st.InsertInteraction(testInteraction(postID, "like", "https://remote.example/likes/1")); err != nil {
+		t.Fatal(err)
+	}
+	third := get(etag)
+	if third.Code != http.StatusOK {
+		t.Fatalf("after new like: code %d, want 200 (etag must change)", third.Code)
+	}
+	if third.Header().Get("ETag") == etag {
+		t.Fatal("ETag did not change after a new reaction")
+	}
+}
+
 func testInteraction(postID int64, kind, apID string) *store.Interaction {
 	return &store.Interaction{
 		APID: apID, Kind: kind, PostID: postID, ActorID: remoteActorID,

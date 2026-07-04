@@ -1,8 +1,13 @@
 package server
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/vrypan/listnr/internal/ap"
 	"github.com/vrypan/listnr/internal/publish"
@@ -63,8 +68,6 @@ func (s *Server) handleOutboxPage(w http.ResponseWriter, r *http.Request, total 
 
 func (s *Server) handleInteractions(w http.ResponseWriter, r *http.Request) {
 	url := r.URL.Query().Get("url")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Cache-Control", "public, max-age=60")
 	payload := map[string]any{
 		"post":          url,
 		"fediverse_url": nil,
@@ -77,43 +80,84 @@ func (s *Server) handleInteractions(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "server error", http.StatusInternalServerError)
 		return
 	}
-	if post == nil {
-		ap.WriteJSON(w, "application/json; charset=utf-8", payload)
-		return
+	if post != nil {
+		if post.APID.Valid {
+			payload["fediverse_url"] = post.APID.String
+		}
+		interactions, err := s.st.VisibleInteractionsForPost(post.ID)
+		if err != nil {
+			http.Error(w, "server error", http.StatusInternalServerError)
+			return
+		}
+		var replies []any
+		likes, boosts := 0, 0
+		for _, in := range interactions {
+			switch in.Kind {
+			case "like":
+				likes++
+			case "boost":
+				boosts++
+			case "reply":
+				replies = append(replies, map[string]any{
+					"author": map[string]any{
+						"name":   in.ActorName,
+						"handle": in.ActorHandle,
+						"url":    in.ActorID,
+						"avatar": in.ActorIconURL,
+					},
+					"content_html": in.ContentHTML,
+					"published":    in.Published,
+					"url":          in.APID,
+					"in_reply_to":  in.InReplyTo,
+				})
+			}
+		}
+		payload["likes"] = likes
+		payload["boosts"] = boosts
+		payload["replies"] = replies
 	}
-	if post.APID.Valid {
-		payload["fediverse_url"] = post.APID.String
-	}
-	interactions, err := s.st.VisibleInteractionsForPost(post.ID)
-	if err != nil {
+
+	// Serialize once (matching WriteJSON's non-HTML-escaping) so the ETag is
+	// a fingerprint of the exact bytes we'd send.
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(payload); err != nil {
 		http.Error(w, "server error", http.StatusInternalServerError)
 		return
 	}
-	var replies []any
-	likes, boosts := 0, 0
-	for _, in := range interactions {
-		switch in.Kind {
-		case "like":
-			likes++
-		case "boost":
-			boosts++
-		case "reply":
-			replies = append(replies, map[string]any{
-				"author": map[string]any{
-					"name":   in.ActorName,
-					"handle": in.ActorHandle,
-					"url":    in.ActorID,
-					"avatar": in.ActorIconURL,
-				},
-				"content_html": in.ContentHTML,
-				"published":    in.Published,
-				"url":          in.APID,
-				"in_reply_to":  in.InReplyTo,
-			})
+	body := buf.Bytes()
+	sum := sha256.Sum256(body)
+	etag := `"` + hex.EncodeToString(sum[:16]) + `"`
+
+	h := w.Header()
+	h.Set("Access-Control-Allow-Origin", "*")
+	h.Set("Access-Control-Expose-Headers", "ETag")
+	// Cache until the reactions change: revalidate against the ETag instead
+	// of expiring on a timer, so an update is picked up immediately and an
+	// unchanged post costs only a 304.
+	h.Set("Cache-Control", "public, no-cache")
+	h.Set("ETag", etag)
+	h.Set("Content-Type", "application/json; charset=utf-8")
+	if etagMatches(r.Header.Get("If-None-Match"), etag) {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	w.Write(body)
+}
+
+// etagMatches reports whether an If-None-Match header covers etag, handling
+// the "*", comma-separated, and weak-validator ("W/") forms.
+func etagMatches(ifNoneMatch, etag string) bool {
+	if ifNoneMatch == "" {
+		return false
+	}
+	for _, tok := range strings.Split(ifNoneMatch, ",") {
+		tok = strings.TrimSpace(tok)
+		tok = strings.TrimPrefix(tok, "W/")
+		if tok == "*" || tok == etag {
+			return true
 		}
 	}
-	payload["likes"] = likes
-	payload["boosts"] = boosts
-	payload["replies"] = replies
-	ap.WriteJSON(w, "application/json; charset=utf-8", payload)
+	return false
 }

@@ -39,7 +39,7 @@ fully static and is never touched.
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/api/interactions?url={post-url}` | JSON for the JS widget: array of replies (author handle/name/avatar, HTML content, timestamp, link to original) + like count + boost count. CORS `*`, cacheable ~1 min. Hidden/blocked replies excluded. |
+| GET | `/api/interactions?url={post-url}` | JSON for the JS widget: array of replies (author handle/name/avatar, HTML content, timestamp, link to original) + like count + boost count. CORS `*`. Sends an `ETag` fingerprint of the response and `Cache-Control: public, no-cache`, so clients cache until the reactions change and revalidate to a `304` otherwise. Hidden/blocked replies excluded. |
 
 ### Admin (bearer-token auth, used by the CLI)
 
