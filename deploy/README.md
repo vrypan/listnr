@@ -7,6 +7,10 @@ make build-linux
 ./listnr version
 ```
 
+`build-linux` produces a CGO-free, stripped release binary. Use
+`make build-linux-debug` when symbols and DWARF debugging information are
+needed for diagnosis.
+
 For a release, build from an annotated semantic-version tag such as `v0.1.0`.
 The Makefile embeds the tag, source commit, and commit timestamp. A build from
 an uncommitted checkout is marked with a `-dirty` suffix.

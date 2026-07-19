@@ -8,13 +8,22 @@ BUILDINFO = github.com/vrypan/listnr/internal/buildinfo
 LDFLAGS = -X '$(BUILDINFO).Version=$(VERSION)' \
 	-X '$(BUILDINFO).Commit=$(COMMIT)' \
 	-X '$(BUILDINFO).CommitTime=$(COMMIT_TIME)'
+RELEASE_LDFLAGS = -s -w $(LDFLAGS)
 
-.PHONY: build build-linux test
+.PHONY: build build-debug build-linux build-linux-debug test
 
 build:
+	CGO_ENABLED=0 go build -trimpath -ldflags "$(RELEASE_LDFLAGS)" \
+		-o $(BINARY) .
+
+build-debug:
 	CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o $(BINARY) .
 
 build-linux:
+	CGO_ENABLED=0 GOOS=linux GOARCH=$(TARGET_ARCH) go build -trimpath \
+		-ldflags "$(RELEASE_LDFLAGS)" -o $(BINARY) .
+
+build-linux-debug:
 	CGO_ENABLED=0 GOOS=linux GOARCH=$(TARGET_ARCH) go build -trimpath \
 		-ldflags "$(LDFLAGS)" -o $(BINARY) .
 

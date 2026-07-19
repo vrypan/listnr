@@ -21,6 +21,10 @@ For a Linux VPS build from macOS:
 make build-linux
 ```
 
+These targets produce CGO-free, trimmed release binaries with symbol and
+DWARF debugging data removed. For an otherwise equivalent binary that keeps
+debugging information, use `make build-debug` or `make build-linux-debug`.
+
 The Makefile derives the version from Git and embeds the commit and commit
 timestamp. Tagged builds report the tag; later builds report the tag plus the
 number of commits and abbreviated commit hash. A modified checkout has a

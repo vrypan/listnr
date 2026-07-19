@@ -51,7 +51,8 @@ docs/widget.js               dependency-free blog interactions widget
 docs/widget.md               widget usage notes
 deploy/listnr.service        systemd unit
 deploy/README.md             build/proxy/Cloudflare deployment notes
-Makefile                     tagged local/Linux builds with embedded metadata
+Makefile                     stripped release and debug local/Linux builds
+                             with embedded metadata
 ```
 
 The SQLite schema in `store.go` has all runtime tables: `posts`, `followers`,
