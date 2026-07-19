@@ -3,7 +3,9 @@ package keys
 import (
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
+	"encoding/hex"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -20,11 +22,11 @@ func LoadOrCreate(dataDir string) (*rsa.PrivateKey, error) {
 	b, err := os.ReadFile(path)
 	switch {
 	case err == nil:
-		block, _ := pem.Decode(b)
-		if block == nil || block.Type != "RSA PRIVATE KEY" {
-			return nil, fmt.Errorf("%s: not an RSA private key", path)
+		key, err := ParsePrivatePEM(b)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", path, err)
 		}
-		return x509.ParsePKCS1PrivateKey(block.Bytes)
+		return key, nil
 	case errors.Is(err, os.ErrNotExist):
 		key, err := rsa.GenerateKey(rand.Reader, 2048)
 		if err != nil {
@@ -41,6 +43,20 @@ func LoadOrCreate(dataDir string) (*rsa.PrivateKey, error) {
 	default:
 		return nil, err
 	}
+}
+
+func ParsePrivatePEM(b []byte) (*rsa.PrivateKey, error) {
+	block, _ := pem.Decode(b)
+	if block == nil || block.Type != "RSA PRIVATE KEY" {
+		return nil, errors.New("not an RSA private key")
+	}
+	return x509.ParsePKCS1PrivateKey(block.Bytes)
+}
+
+func Fingerprint(key *rsa.PrivateKey) string {
+	der, _ := x509.MarshalPKIXPublicKey(&key.PublicKey)
+	sum := sha256.Sum256(der)
+	return hex.EncodeToString(sum[:])
 }
 
 // ParsePublicPEM parses a remote actor's public key. Accepts both SPKI

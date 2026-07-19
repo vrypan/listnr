@@ -16,6 +16,7 @@ import (
 	"github.com/vrypan/listnr/internal/delivery"
 	"github.com/vrypan/listnr/internal/fedi"
 	"github.com/vrypan/listnr/internal/feed"
+	"github.com/vrypan/listnr/internal/instance"
 	"github.com/vrypan/listnr/internal/keys"
 	"github.com/vrypan/listnr/internal/server"
 	"github.com/vrypan/listnr/internal/store"
@@ -31,6 +32,11 @@ var serveCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		lock, err := instance.Acquire(cfg.Server.DataDir)
+		if err != nil {
+			return err
+		}
+		defer lock.Close()
 		key, err := keys.LoadOrCreate(cfg.Server.DataDir)
 		if err != nil {
 			return err
@@ -60,6 +66,7 @@ var serveCmd = &cobra.Command{
 
 		apHandler := &ap.Handler{Actor: cfg.Actor, PublicKeyPEM: pubPEM}
 		srv := server.New(cfg, st, apHandler, fetcher, queue, log)
+		srv.SetConfigPath(configPath)
 		poller := feed.NewPoller(cfg, st, queue, log)
 		srv.SetPollFunc(poller.Trigger)
 		go poller.Run(ctx)

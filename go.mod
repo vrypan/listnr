@@ -7,6 +7,7 @@ require (
 	github.com/microcosm-cc/bluemonday v1.0.27
 	github.com/mmcdole/gofeed v1.3.0
 	github.com/spf13/cobra v1.10.2
+	golang.org/x/sys v0.44.0
 	modernc.org/sqlite v1.53.0
 )
 
@@ -27,7 +28,6 @@ require (
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/spf13/pflag v1.0.9 // indirect
 	golang.org/x/net v0.26.0 // indirect
-	golang.org/x/sys v0.44.0 // indirect
 	golang.org/x/text v0.16.0 // indirect
 	modernc.org/libc v1.73.4 // indirect
 	modernc.org/mathutil v1.7.1 // indirect

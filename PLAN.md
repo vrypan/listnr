@@ -17,7 +17,7 @@ decisions**, implement them as written.
 - Single actor only. No multi-actor support anywhere.
 - Module: `github.com/vrypan/listnr`.
 
-> **Status:** milestones 1 through 5 are DONE. The remaining work is external
+> **Status:** milestones 1 through 6 are DONE. The remaining work is external
 > deployment/operations: configure the real VPS, Cloudflare redirect, and blog
 > widget include; then run a production-feed smoke test. The milestone sections
 > below are kept as implementation/reference specs — do not change their
@@ -32,10 +32,14 @@ cmd/serve.go                 `listnr serve`, delivery/feed workers,
                              graceful shutdown
 cmd/client.go                admin API client commands
 cmd/version.go               local/remote `listnr version` with JSON output
+cmd/backup.go                remote/local export and local-only import
 internal/buildinfo           Git-tag/VCS application version and User-Agent
 internal/config/config.go    TOML config, validation, defaults
 internal/keys/keys.go        RSA-2048 keypair, actor.pem in data_dir (PKCS#1),
-                             PublicPEM() renders SPKI PEM
+                             parsing, fingerprinting, PublicPEM() SPKI output
+internal/backup              versioned archive creation, validation, restore,
+                             and rollback retention
+internal/instance            daemon/import data-directory lock
 internal/store/*.go          sql.DB (single conn, WAL, FK on) + full schema,
                              post/state/admin query helpers
 internal/ap/actor.go         actor JSON-LD doc; browser GETs redirect to blog
@@ -46,7 +50,7 @@ internal/delivery            persistent signed delivery queue
 internal/feed                RSS/Atom polling + first-run/steady-state ingest
 internal/publish             Note/Create/Update construction
 internal/server/*.go         public AP routes, inbox dispatch, interactions API,
-                             admin API
+                             admin API, authenticated backup export
 docs/widget.js               dependency-free blog interactions widget
 docs/widget.md               widget usage notes
 deploy/listnr.service        systemd unit
@@ -382,6 +386,33 @@ Implemented in `internal/server/public.go`, `internal/server/admin.go`, and
   proxy for `ap.vrypan.net`, and the Cloudflare redirect rule
   `vrypan.net/.well-known/webfinger*` → 302
   `https://ap.vrypan.net/.well-known/webfinger` (preserve query string).
+
+---
+
+## Milestone 6 — portable backup and restore (done)
+
+- `listnr export` downloads a backup from the authenticated
+  `POST /admin/export` endpoint; `--local` snapshots the local instance.
+  `--output -` supports administrator-selected encryption pipelines.
+- The unencrypted, versioned `.tar.gz` contains a consistent SQLite online
+  backup, `actor.pem`, the exact `listnr.toml`, and `manifest.json`. The
+  manifest records build/schema versions, actor identity, key fingerprint,
+  creation time, and payload SHA-256 checksums and sizes.
+- Every admin response, including exports, sends
+  `Cache-Control: no-store, private` and `Pragma: no-cache`.
+- `listnr import` is local-only. It rejects unsafe or unexpected archive
+  entries, checksum/key/config/actor mismatches, corrupt SQLite databases,
+  and schemas newer than the importing binary.
+- The daemon and importer acquire the same exclusive nonblocking lock in
+  `server.data_dir`; imports therefore require the daemon to be stopped.
+- Existing destination config is preserved by default. A missing config is
+  restored automatically; `--replace-config` explicitly installs the
+  archived config. Existing database, WAL, key, and replaced config files are
+  retained in `pre-import-<timestamp>-<suffix>` for rollback.
+- Restore requires an unchanged actor id and handle. Moving to another public
+  actor host remains a separate ActivityPub `Move` operation.
+- Tests cover consistent snapshot/restore, actor mismatch, lock exclusion,
+  unsafe archive paths, rollback retention, and authenticated no-cache export.
 
 ## Gotchas the implementer must not "fix"
 

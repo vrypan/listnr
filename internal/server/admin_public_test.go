@@ -1,12 +1,19 @@
 package server
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/vrypan/listnr/internal/backup"
+	"github.com/vrypan/listnr/internal/keys"
 	"github.com/vrypan/listnr/internal/store"
 )
 
@@ -46,6 +53,60 @@ func TestAdminAuthDisabledWrongAndRight(t *testing.T) {
 	}
 	if stats.Build.Version == "" || stats.SchemaVersion < 1 {
 		t.Fatalf("stats build metadata = %+v", stats)
+	}
+}
+
+func TestAdminExport(t *testing.T) {
+	e := newTestEnv(t)
+	e.srv.cfg.Admin.Token = "secret"
+	var databasePath string
+	if err := e.st.DB.QueryRow(`SELECT file FROM pragma_database_list WHERE name = 'main'`).
+		Scan(&databasePath); err != nil {
+		t.Fatal(err)
+	}
+	dataDir := filepath.Dir(databasePath)
+	e.srv.cfg.Server.DataDir = dataDir
+	if _, err := keys.LoadOrCreate(dataDir); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(t.TempDir(), "listnr.toml")
+	contents := fmt.Sprintf(`[actor]
+username = "blog"
+domain = "vrypan.net"
+host = "ap.vrypan.net"
+blog_url = "https://blog.vrypan.net"
+[feed]
+url = "https://blog.vrypan.net/feed.xml"
+[server]
+data_dir = %q
+[admin]
+token = "secret"
+`, dataDir)
+	if err := os.WriteFile(configPath, []byte(contents), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	e.srv.SetConfigPath(configPath)
+
+	r := httptest.NewRequest(http.MethodPost, "https://ap.vrypan.net/admin/export", nil)
+	r.Header.Set("Authorization", "Bearer secret")
+	w := httptest.NewRecorder()
+	e.srv.Routes().ServeHTTP(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("export code = %d, body = %s", w.Code, w.Body.String())
+	}
+	if got := w.Header().Get("Cache-Control"); got != "no-store, private" {
+		t.Fatalf("Cache-Control = %q", got)
+	}
+	if got := w.Header().Get("Content-Type"); got != "application/gzip" {
+		t.Fatalf("Content-Type = %q", got)
+	}
+	validated, err := backup.Validate(context.Background(), bytes.NewReader(w.Body.Bytes()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer validated.Close()
+	if validated.Manifest.ActorID != e.srv.cfg.Actor.ID() {
+		t.Fatalf("actor ID = %q", validated.Manifest.ActorID)
 	}
 }
 

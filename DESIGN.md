@@ -57,6 +57,7 @@ fully static and is never touched.
 | DELETE | `/admin/followers/{id}` | Force-remove a follower. |
 | GET | `/admin/stats` | Application build, database schema version, and counts for followers, posts, interactions, and queue depth. |
 | POST | `/admin/poll` | Trigger an immediate feed poll (also the deploy-webhook hook point later). |
+| POST | `/admin/export` | Stream a portable instance backup generated from a consistent SQLite snapshot. Responses are private and non-cacheable. |
 
 ## Inbox handling
 
@@ -161,8 +162,26 @@ listnr block add|rm|list <actor-or-domain>
 listnr followers list [--rm <id>]
 listnr stats
 listnr refresh       # tell the server to fetch the RSS feed now (alias: poll)
-listnr keygen        # (first-run helper, normally automatic)
+listnr export [-o FILE|-] [--local]
+listnr import <FILE|-> [--replace-config]  # local only; daemon stopped
 ```
+
+## Backup and restore
+
+The versioned `.tar.gz` backup format contains `manifest.json`, a standalone
+SQLite snapshot at `data/listnr.db`, `data/actor.pem`, and the exact config at
+`config/listnr.toml`. The manifest records the archive format, application
+build, database schema, actor id and handle, public-key fingerprint, creation
+time, and a SHA-256 checksum and size for every payload file.
+
+Remote export requires the admin bearer token and is intended to run over
+HTTPS. The archive itself is not encrypted, allowing administrators to store
+it directly or pipe it through their preferred encryption tool. Import is
+local-only and validates all paths, checksums, key/config/manifest identity,
+SQLite integrity, and schema compatibility before installation. The daemon
+and importer share an exclusive data-directory lock. Existing runtime files
+are retained in a timestamped rollback directory; an existing config is only
+replaced with `--replace-config`.
 
 ## Out of scope (deliberately)
 

@@ -36,6 +36,28 @@ listnr version --remote
 The daemon also writes its version, commit, and database schema version to the
 startup journal.
 
+Create regular backups from another machine over the TLS endpoint:
+
+```sh
+listnr export -o listnr-backup-$(date -u +%Y%m%d).tar.gz
+```
+
+The archive is not encrypted and contains `actor.pem` and the admin token.
+Protect it or pipe `listnr export -o -` into an encryption tool. To restore on
+a replacement server, install the binary and destination config, stop the
+service, then run:
+
+```sh
+sudo systemctl stop listnr
+sudo listnr import listnr-backup.tar.gz -c /etc/listnr/listnr.toml
+sudo systemctl start listnr
+```
+
+Keep the same public `actor.host`, username, and handle domain. The destination
+config is preserved unless `--replace-config` is supplied, so deployment-only
+settings can differ. The import reports the rollback directory containing the
+previous instance files.
+
 For the handle domain, add a Cloudflare redirect rule:
 
 ```text

@@ -1,11 +1,13 @@
 package store
 
 import (
+	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"path/filepath"
 
-	_ "modernc.org/sqlite"
+	"modernc.org/sqlite"
 )
 
 const schema = `
@@ -196,6 +198,39 @@ func (s *Store) Close() error { return s.DB.Close() }
 func (s *Store) SchemaVersion() int { return s.schemaVersion }
 
 func (s *Store) MigratedFrom() int { return s.migratedFrom }
+
+func CurrentSchemaVersion() int { return currentSchemaVersion }
+
+// BackupTo creates a consistent standalone SQLite snapshot, including data
+// that has not yet been checkpointed from the source database's WAL.
+func (s *Store) BackupTo(ctx context.Context, destination string) error {
+	conn, err := s.DB.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	return conn.Raw(func(driverConn any) error {
+		backuper, ok := driverConn.(interface {
+			NewBackup(string) (*sqlite.Backup, error)
+		})
+		if !ok {
+			return fmt.Errorf("sqlite driver connection %T does not support online backup", driverConn)
+		}
+		backup, err := backuper.NewBackup(destination)
+		if err != nil {
+			return err
+		}
+		more, stepErr := backup.Step(-1)
+		if stepErr == nil && more {
+			stepErr = fmt.Errorf("sqlite backup did not finish")
+		}
+		finishedConn, finishErr := backup.Commit()
+		if finishedConn != nil {
+			finishErr = errors.Join(finishErr, finishedConn.Close())
+		}
+		return errors.Join(stepErr, finishErr)
+	})
+}
 
 func (s *Store) FollowerCount() (int, error) {
 	var n int

@@ -199,6 +199,59 @@ the authenticated admin API and describes the daemon currently running on the
 configured server. `listnr stats` also includes the daemon build and database
 schema versions.
 
+## Backup and Restore
+
+Create a backup from a running remote daemon:
+
+```sh
+listnr export -o listnr-backup.tar.gz
+```
+
+This uses the server and token from `~/.config/listnr/cli.toml`, sends an
+authenticated `POST /admin/export` over HTTPS, and downloads a consistent
+SQLite snapshot. To export directly from local files instead:
+
+```sh
+listnr export --local -c /etc/listnr/listnr.toml -o listnr-backup.tar.gz
+```
+
+Backups are portable gzip-compressed tar archives containing the database,
+the actor's private key, the exact TOML configuration, and a JSON manifest
+with versions, actor identity, key fingerprint, sizes, and SHA-256 checksums.
+They are deliberately unencrypted. Store them with the same care as the
+private key and admin token. Encryption can be added by the administrator
+without changing the backup format:
+
+```sh
+listnr export -o - | age -r age1example... > listnr-backup.tar.gz.age
+age -d listnr-backup.tar.gz.age | listnr import - -c /etc/listnr/listnr.toml
+```
+
+Imports are local-only. Stop the daemon first, copy the archive to the new
+server, and run:
+
+```sh
+sudo systemctl stop listnr
+sudo listnr import listnr-backup.tar.gz -c /etc/listnr/listnr.toml
+sudo systemctl start listnr
+```
+
+The import verifies archive paths, checksums, the RSA key fingerprint, SQLite
+integrity and schema compatibility, and actor identity before replacing any
+runtime files. An existing destination config is retained by default, which
+allows its `server.data_dir` and listen address to differ on the new server.
+Use `--replace-config` to install the exact archived config. If the config is
+missing, it is restored automatically.
+
+The previous database, key, WAL files, and any replaced config are retained
+under `server.data_dir/pre-import-<timestamp>-<suffix>/`. The daemon and importer use
+the same nonblocking lock, so an import fails while the daemon is running.
+
+Restoring preserves the ActivityPub actor only when `actor.host`, username,
+and handle domain remain unchanged. Moving the actor to a different public
+host requires an ActivityPub `Move`; changing the config during restore is
+not sufficient.
+
 ## Feed Behavior
 
 On the first run, listnr imports the newest `feed.backfill` items as

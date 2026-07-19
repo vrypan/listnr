@@ -26,14 +26,15 @@ type Deliverer interface {
 }
 
 type Server struct {
-	cfg      *config.Config
-	st       *store.Store
-	ap       *ap.Handler
-	fetch    ActorFetcher
-	deliver  Deliverer
-	pollNow  func(context.Context) error
-	sanitize *bluemonday.Policy
-	log      *slog.Logger
+	cfg        *config.Config
+	configPath string
+	st         *store.Store
+	ap         *ap.Handler
+	fetch      ActorFetcher
+	deliver    Deliverer
+	pollNow    func(context.Context) error
+	sanitize   *bluemonday.Policy
+	log        *slog.Logger
 }
 
 func New(cfg *config.Config, st *store.Store, apHandler *ap.Handler,
@@ -51,6 +52,10 @@ func New(cfg *config.Config, st *store.Store, apHandler *ap.Handler,
 
 func (s *Server) SetPollFunc(fn func(context.Context) error) {
 	s.pollNow = fn
+}
+
+func (s *Server) SetConfigPath(path string) {
+	s.configPath = path
 }
 
 func (s *Server) Routes() http.Handler {
