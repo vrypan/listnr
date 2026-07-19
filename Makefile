@@ -1,5 +1,6 @@
 BINARY ?= listnr
 TARGET_ARCH ?= amd64
+GORELEASER ?= goreleaser
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT ?= $(shell git rev-parse HEAD 2>/dev/null)
 COMMIT_TIME ?= $(shell git show -s --format=%cI HEAD 2>/dev/null)
@@ -10,7 +11,8 @@ LDFLAGS = -X '$(BUILDINFO).Version=$(VERSION)' \
 	-X '$(BUILDINFO).CommitTime=$(COMMIT_TIME)'
 RELEASE_LDFLAGS = -s -w $(LDFLAGS)
 
-.PHONY: build build-debug build-linux build-linux-debug test
+.PHONY: build build-debug build-linux build-linux-debug release-check \
+	release-snapshot test
 
 build:
 	CGO_ENABLED=0 go build -trimpath -ldflags "$(RELEASE_LDFLAGS)" \
@@ -26,6 +28,12 @@ build-linux:
 build-linux-debug:
 	CGO_ENABLED=0 GOOS=linux GOARCH=$(TARGET_ARCH) go build -trimpath \
 		-ldflags "$(LDFLAGS)" -o $(BINARY) .
+
+release-check:
+	$(GORELEASER) check
+
+release-snapshot:
+	$(GORELEASER) release --snapshot --clean
 
 test:
 	go test ./...

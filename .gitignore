@@ -5,3 +5,4 @@ listnr
 *.pem
 listnr.toml
 listnr-do
+dist/

@@ -15,6 +15,12 @@ For a release, build from an annotated semantic-version tag such as `v0.1.0`.
 The Makefile embeds the tag, source commit, and commit timestamp. A build from
 an uncommitted checkout is marked with a `-dirty` suffix.
 
+After pushing a `v*` tag, manually run the GitHub Actions Release workflow for
+that tag. GoReleaser creates macOS ARM64 and Linux AMD64/ARM64 archives,
+generates SHA-256 checksums, and publishes them to the matching GitHub
+Release. Run `make release-snapshot` before tagging to reproduce the packaging
+locally without publishing.
+
 Install it as `/usr/local/bin/listnr`, put `listnr.toml` in `/etc/listnr/`,
 and use `deploy/listnr.service` as the systemd unit. With `DynamicUser=yes`
 and `StateDirectory=listnr`, set:

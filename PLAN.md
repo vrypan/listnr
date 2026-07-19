@@ -56,7 +56,11 @@ docs/widget.md               widget usage notes
 deploy/listnr.service        systemd unit
 deploy/README.md             build/proxy/Cloudflare deployment notes
 Makefile                     stripped release and debug local/Linux builds
-                             with embedded metadata
+                             with embedded metadata; GoReleaser validation and
+                             snapshot targets
+.goreleaser.yml              macOS ARM64 and Linux AMD64/ARM64 release archives
+.github/workflows            CI snapshot builds and manually dispatched
+                             GitHub Releases
 ```
 
 The SQLite schema in `store.go` has all runtime tables: `posts`, `followers`,
@@ -73,11 +77,20 @@ reports it through its startup log, `/admin/stats`, `listnr stats`, and
 `listnr version --remote`. Application versions must never be included in
 actor, activity, or object IDs.
 
+GoReleaser v2 produces stripped, reproducible `tar.gz` archives for
+`darwin/arm64`, `linux/amd64`, and `linux/arm64`, with the same embedded build
+metadata and a SHA-256 checksum manifest. GitHub Actions tests and snapshot
+builds these targets for pull requests and `main`. After a `v*` tag is pushed,
+the manually dispatched Release workflow publishes its GitHub Release. The
+workflow pins GoReleaser v2.17.0 via the official `goreleaser-action` v7.2.3
+release.
+
 Verified locally:
 
 - `go test ./...`
 - `go vet ./...`
 - `CGO_ENABLED=0 go build ./...`
+- GoReleaser v2.17.0 `check` and snapshot release for all three targets
 
 Not yet done in this repo session: manual smoke against the real feed URL with
 a temporary production-like DB, and live deployment verification.

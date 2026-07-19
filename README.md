@@ -50,6 +50,30 @@ Releases use annotated semantic-version tags. Minor versions add compatible
 features, patch versions contain compatible fixes, and major versions are
 reserved for incompatible configuration, CLI, or persistent-data changes.
 
+GoReleaser builds release archives for macOS ARM64 and Linux AMD64/ARM64.
+Validate the release configuration or build all release artifacts locally
+with:
+
+```sh
+make release-check
+make release-snapshot
+```
+
+GitHub Actions tests and snapshot-builds all three targets on pull requests
+and pushes to `main`. To publish, push a `v*` tag and manually run the Release
+workflow for that tag. It creates a GitHub Release containing one `.tar.gz`
+archive per target plus `checksums.txt`:
+
+```sh
+git tag -a v0.2.0 -m "Release v0.2.0"
+git push origin v0.2.0
+gh workflow run release.yml --ref v0.2.0
+```
+
+The workflows pin the official GoReleaser action v7.2.3 and GoReleaser
+v2.17.0. Release binaries retain the existing version, commit, and commit-time
+metadata reported by `listnr version`.
+
 ## Configure
 
 Create `listnr.toml`:
