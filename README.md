@@ -12,20 +12,39 @@ TLS.
 ## Build
 
 ```sh
-CGO_ENABLED=0 go build -o listnr .
+make build
 ```
 
 For a Linux VPS build from macOS:
 
 ```sh
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o listnr .
+make build-linux
 ```
 
-To inject a version string:
+The Makefile derives the version from Git and embeds the commit and commit
+timestamp. Tagged builds report the tag; later builds report the tag plus the
+number of commits and abbreviated commit hash. A modified checkout has a
+`-dirty` suffix. For example:
+
+```text
+v0.1.0
+v0.1.0-3-g98e6d02
+v0.1.0-3-g98e6d02-dirty
+```
+
+Inspect a binary with:
 
 ```sh
-go build -ldflags "-X github.com/vrypan/listnr/cmd.Version=$(git describe --tags --always --dirty)" -o listnr .
+./listnr version
+./listnr version --json
 ```
+
+Plain `go build` also works. Such builds use the VCS metadata embedded by the
+Go toolchain and report a `dev-<commit>` version.
+
+Releases use annotated semantic-version tags. Minor versions add compatible
+features, patch versions contain compatible fixes, and major versions are
+reserved for incompatible configuration, CLI, or persistent-data changes.
 
 ## Configure
 
@@ -113,6 +132,10 @@ On startup, listnr:
 - starts the feed poller;
 - serves ActivityPub, public API, and admin API routes.
 
+The startup log includes the application version, source commit, and database
+schema version. Database migrations are numbered, applied transactionally,
+and recorded in the `schema_migrations` table.
+
 Logs are written to stderr. Under systemd, they are captured by journald. HTTP
 request logging is disabled by default; enable `[server] log_requests = true`
 if you want access-style request logs from the daemon itself.
@@ -129,7 +152,8 @@ Public endpoints include:
 
 ## Admin CLI
 
-Every command except `serve` talks to the admin API.
+Administrative commands talk to the admin API. `listnr version` is local
+unless `--remote` is supplied.
 
 Create `~/.config/listnr/cli.toml`:
 
@@ -144,6 +168,7 @@ Common commands:
 
 ```sh
 listnr stats
+listnr version --remote
 listnr refresh   # tell the server to fetch the RSS feed now (alias: poll)
 
 listnr replies list
@@ -162,7 +187,13 @@ listnr followers list
 listnr followers rm 42
 
 listnr version
+listnr version --json
 ```
+
+`listnr version` describes the local binary. `listnr version --remote` reads
+the authenticated admin API and describes the daemon currently running on the
+configured server. `listnr stats` also includes the daemon build and database
+schema versions.
 
 ## Feed Behavior
 

@@ -35,6 +35,18 @@ func TestAdminAuthDisabledWrongAndRight(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("right token code = %d, want 200", w.Code)
 	}
+	var stats struct {
+		Build struct {
+			Version string `json:"version"`
+		} `json:"build"`
+		SchemaVersion int `json:"schema_version"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &stats); err != nil {
+		t.Fatal(err)
+	}
+	if stats.Build.Version == "" || stats.SchemaVersion < 1 {
+		t.Fatalf("stats build metadata = %+v", stats)
+	}
 }
 
 func TestInteractionsPayloadExcludesHidden(t *testing.T) {

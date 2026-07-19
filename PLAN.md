@@ -31,7 +31,8 @@ cmd/root.go                  cobra root, -c/--config flag (default listnr.toml)
 cmd/serve.go                 `listnr serve`, delivery/feed workers,
                              graceful shutdown
 cmd/client.go                admin API client commands
-cmd/version.go               ldflags-injected `listnr version`
+cmd/version.go               local/remote `listnr version` with JSON output
+internal/buildinfo           Git-tag/VCS application version and User-Agent
 internal/config/config.go    TOML config, validation, defaults
 internal/keys/keys.go        RSA-2048 keypair, actor.pem in data_dir (PKCS#1),
                              PublicPEM() renders SPKI PEM
@@ -50,12 +51,22 @@ docs/widget.js               dependency-free blog interactions widget
 docs/widget.md               widget usage notes
 deploy/listnr.service        systemd unit
 deploy/README.md             build/proxy/Cloudflare deployment notes
+Makefile                     tagged local/Linux builds with embedded metadata
 ```
 
 The SQLite schema in `store.go` has all runtime tables: `posts`, `followers`,
-`interactions`, `blocks`, `deliveries`, `actor_cache`, and `state`. See
-DESIGN.md for columns. Extend with `ALTER TABLE`-style additive migrations
-only if a column is genuinely missing.
+`interactions`, `blocks`, `deliveries`, `actor_cache`, `state`, and
+`schema_migrations`. See DESIGN.md for columns. Every schema change must be a
+new numbered migration applied transactionally; never reuse or edit a released
+migration number.
+
+Application releases use semantic-version Git tags. `make build` and
+`make build-linux` inject the tag-aware `git describe` value, commit, and
+commit timestamp. Plain `go build` falls back to Go's embedded VCS metadata.
+The local binary reports this through `listnr version`; the running daemon
+reports it through its startup log, `/admin/stats`, `listnr stats`, and
+`listnr version --remote`. Application versions must never be included in
+actor, activity, or object IDs.
 
 Verified locally:
 

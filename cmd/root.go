@@ -5,13 +5,15 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	"github.com/vrypan/listnr/internal/buildinfo"
 )
 
 var configPath string
 
 var rootCmd = &cobra.Command{
-	Use:   "listnr",
-	Short: "ActivityPub bridge for a static blog",
+	Use:     "listnr",
+	Version: buildinfo.Current().Version,
+	Short:   "ActivityPub bridge for a static blog",
 	Long: `listnr gives a statically generated blog a fediverse presence:
 it serves a single ActivityPub actor, announces new posts from the blog's
 RSS/Atom feed to followers, and collects replies/likes/boosts so the blog

@@ -21,6 +21,10 @@ fully static and is never touched.
 - SQLite via `modernc.org/sqlite` (pure Go, no cgo).
 - RSA keypair generated on first run, stored in the data directory.
 - Config: one TOML file.
+- Release identity: semantic-version Git tags with commit metadata embedded by
+  the build; plain Go builds fall back to Go's VCS build information.
+- Database changes: numbered transactional migrations recorded in
+  `schema_migrations`, independently of the application release version.
 
 ## HTTP endpoints
 
@@ -51,7 +55,7 @@ fully static and is never touched.
 | GET/POST/DELETE | `/admin/blocks` | Manage blocklist entries (full actor URL or bare domain). Adding a block hides existing matching interactions. |
 | GET | `/admin/followers` | List followers. |
 | DELETE | `/admin/followers/{id}` | Force-remove a follower. |
-| GET | `/admin/stats` | Counts: followers, posts, interactions, queue depth. |
+| GET | `/admin/stats` | Application build, database schema version, and counts for followers, posts, interactions, and queue depth. |
 | POST | `/admin/poll` | Trigger an immediate feed poll (also the deploy-webhook hook point later). |
 
 ## Inbox handling

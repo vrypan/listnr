@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/mmcdole/gofeed"
+	"github.com/vrypan/listnr/internal/buildinfo"
 	"github.com/vrypan/listnr/internal/config"
-	"github.com/vrypan/listnr/internal/fedi"
 	"github.com/vrypan/listnr/internal/publish"
 	"github.com/vrypan/listnr/internal/store"
 )
@@ -93,7 +93,7 @@ func (p *Poller) Poll(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("User-Agent", fedi.UserAgent)
+	req.Header.Set("User-Agent", buildinfo.UserAgent())
 	if etag, _ := p.st.GetState("feed.etag"); etag != "" {
 		req.Header.Set("If-None-Match", etag)
 	}

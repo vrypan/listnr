@@ -12,7 +12,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/vrypan/listnr/internal/fedi"
+	"github.com/vrypan/listnr/internal/buildinfo"
 	"github.com/vrypan/listnr/internal/httpsig"
 	"github.com/vrypan/listnr/internal/safehttp"
 	"github.com/vrypan/listnr/internal/store"
@@ -168,7 +168,7 @@ func (q *Queue) post(ctx context.Context, inboxURL string, body []byte) (int, er
 		return 0, err
 	}
 	req.Header.Set("Content-Type", contentType)
-	req.Header.Set("User-Agent", fedi.UserAgent)
+	req.Header.Set("User-Agent", buildinfo.UserAgent())
 	if err := httpsig.Sign(req, body, q.key, q.keyID); err != nil {
 		return 0, err
 	}

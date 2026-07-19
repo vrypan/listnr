@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vrypan/listnr/internal/buildinfo"
 	"github.com/vrypan/listnr/internal/httpsig"
 	"github.com/vrypan/listnr/internal/safehttp"
 	"github.com/vrypan/listnr/internal/store"
@@ -23,7 +24,6 @@ const (
 	acceptAP     = `application/activity+json, application/ld+json; profile="https://www.w3.org/ns/activitystreams"`
 	maxBody      = 1 << 20
 	cacheMaxAge  = 24 * time.Hour
-	UserAgent    = "listnr/0.1 (+https://github.com/vrypan/listnr)"
 	fetchTimeout = 10 * time.Second
 )
 
@@ -71,7 +71,7 @@ func (c *Client) Get(ctx context.Context, rawURL string) ([]byte, int, error) {
 		return nil, 0, err
 	}
 	req.Header.Set("Accept", acceptAP)
-	req.Header.Set("User-Agent", UserAgent)
+	req.Header.Set("User-Agent", buildinfo.UserAgent())
 	if err := httpsig.Sign(req, nil, c.key, c.keyID); err != nil {
 		return nil, 0, err
 	}

@@ -2,8 +2,8 @@ package store
 
 import (
 	"database/sql"
+	"fmt"
 	"path/filepath"
-	"strings"
 
 	_ "modernc.org/sqlite"
 )
@@ -86,10 +86,19 @@ CREATE TABLE IF NOT EXISTS seen_activities (
 	seen_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
 );
 CREATE INDEX IF NOT EXISTS idx_seen_activities_seen ON seen_activities(seen_at);
+
+CREATE TABLE IF NOT EXISTS schema_migrations (
+	version    INTEGER PRIMARY KEY,
+	applied_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+);
 `
 
+const currentSchemaVersion = 1
+
 type Store struct {
-	DB *sql.DB
+	DB            *sql.DB
+	schemaVersion int
+	migratedFrom  int
 }
 
 func Open(dataDir string) (*Store, error) {
@@ -104,28 +113,89 @@ func Open(dataDir string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
-	if err := migrate(db); err != nil {
+	from, to, err := migrate(db)
+	if err != nil {
 		db.Close()
 		return nil, err
 	}
-	return &Store{DB: db}, nil
+	return &Store{DB: db, schemaVersion: to, migratedFrom: from}, nil
 }
 
-// migrate applies additive column changes to databases created before the
-// column existed in the schema above. Each statement must be safe to re-run:
-// a "duplicate column name" error means the column is already there.
-func migrate(db *sql.DB) error {
-	for _, stmt := range []string{
-		`ALTER TABLE interactions ADD COLUMN in_reply_to TEXT NOT NULL DEFAULT ''`,
-	} {
-		if _, err := db.Exec(stmt); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+type migration struct {
+	version int
+	apply   func(*sql.Tx) error
+}
+
+var migrations = []migration{
+	{
+		version: 1,
+		apply: func(tx *sql.Tx) error {
+			exists, err := columnExists(tx, "interactions", "in_reply_to")
+			if err != nil || exists {
+				return err
+			}
+			_, err = tx.Exec(`ALTER TABLE interactions ADD COLUMN in_reply_to TEXT NOT NULL DEFAULT ''`)
 			return err
-		}
+		},
+	},
+}
+
+// migrate applies each missing migration in its own transaction. Returning
+// both versions lets the daemon report upgrades in its startup log.
+func migrate(db *sql.DB) (int, int, error) {
+	var version int
+	if err := db.QueryRow(`SELECT COALESCE(MAX(version), 0) FROM schema_migrations`).Scan(&version); err != nil {
+		return 0, 0, err
 	}
-	return nil
+	from := version
+	if version > currentSchemaVersion {
+		return from, version, fmt.Errorf(
+			"database schema version %d is newer than supported version %d",
+			version, currentSchemaVersion)
+	}
+	for _, m := range migrations {
+		if m.version <= version {
+			continue
+		}
+		tx, err := db.Begin()
+		if err != nil {
+			return from, version, err
+		}
+		if err := m.apply(tx); err != nil {
+			tx.Rollback()
+			return from, version, fmt.Errorf("apply schema migration %d: %w", m.version, err)
+		}
+		if _, err := tx.Exec(`INSERT INTO schema_migrations (version) VALUES (?)`, m.version); err != nil {
+			tx.Rollback()
+			return from, version, err
+		}
+		if err := tx.Commit(); err != nil {
+			return from, version, err
+		}
+		version = m.version
+	}
+	if version != currentSchemaVersion {
+		return from, version, fmt.Errorf(
+			"database schema at version %d, expected %d",
+			version, currentSchemaVersion)
+	}
+	return from, version, nil
+}
+
+func columnExists(tx *sql.Tx, table, column string) (bool, error) {
+	rows, err := tx.Query(`SELECT name FROM pragma_table_info(?) WHERE name = ?`, table, column)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+	return rows.Next(), rows.Err()
 }
 
 func (s *Store) Close() error { return s.DB.Close() }
+
+func (s *Store) SchemaVersion() int { return s.schemaVersion }
+
+func (s *Store) MigratedFrom() int { return s.migratedFrom }
 
 func (s *Store) FollowerCount() (int, error) {
 	var n int

@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/vrypan/listnr/internal/ap"
+	"github.com/vrypan/listnr/internal/buildinfo"
 	"github.com/vrypan/listnr/internal/config"
 	"github.com/vrypan/listnr/internal/delivery"
 	"github.com/vrypan/listnr/internal/fedi"
@@ -43,6 +44,9 @@ var serveCmd = &cobra.Command{
 			return err
 		}
 		defer st.Close()
+		if st.MigratedFrom() != st.SchemaVersion() {
+			log.Info("database migrated", "from", st.MigratedFrom(), "to", st.SchemaVersion())
+		}
 
 		keyID := cfg.Actor.ID() + "#main-key"
 		fetcher := fedi.NewClient(st, key, keyID, nil)
@@ -69,7 +73,11 @@ var serveCmd = &cobra.Command{
 			MaxHeaderBytes:    1 << 20,
 		}
 
+		build := buildinfo.Current()
 		log.Info("listnr starting",
+			"version", build.Version,
+			"commit", build.Commit,
+			"schema_version", st.SchemaVersion(),
 			"handle", "@"+cfg.Actor.Handle(),
 			"actor", cfg.Actor.ID(),
 			"listen", cfg.Server.Listen)

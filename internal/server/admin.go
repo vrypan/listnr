@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/vrypan/listnr/internal/buildinfo"
 )
 
 func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
@@ -178,6 +180,8 @@ func (s *Server) adminStats(w http.ResponseWriter) {
 		return
 	}
 	writeAdminJSON(w, map[string]any{
+		"build":              buildinfo.Current(),
+		"schema_version":     s.st.SchemaVersion(),
 		"followers":          followers,
 		"posts":              posts,
 		"interactions":       interactions,
