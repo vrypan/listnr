@@ -1,16 +1,12 @@
 package server
 
 import (
-	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
 	"io"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/vrypan/listnr/internal/ap"
+	"github.com/vrypan/listnr/internal/httpcache"
 	"github.com/vrypan/listnr/internal/publish"
 	"github.com/vrypan/listnr/internal/store"
 )
@@ -26,6 +22,8 @@ func (s *Server) handlePost(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	// This URL has two representations, so a shared cache must key on Accept.
+	httpcache.AddVary(w, "Accept")
 	if post.Deleted() {
 		s.servePostGone(w, r, post)
 		return
@@ -39,7 +37,16 @@ func (s *Server) handlePost(w http.ResponseWriter, r *http.Request) {
 	// (e.g. via /authorize_interaction) rejects objects without one. In
 	// Create/Update fan-out the wrapping activity provides it instead.
 	note["@context"] = "https://www.w3.org/ns/activitystreams"
-	ap.WriteJSON(w, ap.ContentType, note)
+	s.writeAP(w, r, note)
+}
+
+// writeAP serves an ActivityPub document with an exact-representation ETag,
+// so a repeat fetch of unchanged state costs a bodyless 304.
+func (s *Server) writeAP(w http.ResponseWriter, r *http.Request, doc any) {
+	if err := httpcache.WriteJSON(w, r, ap.ContentType, ap.CacheControl, doc); err != nil {
+		s.log.Error("write activitypub document failed", "path", r.URL.Path, "err", err)
+		http.Error(w, "server error", http.StatusInternalServerError)
+	}
 }
 
 // servePostGone answers for a withdrawn post. ActivityPub says a server SHOULD
@@ -53,11 +60,12 @@ func (s *Server) servePostGone(w http.ResponseWriter, r *http.Request, post *sto
 		io.WriteString(w, "This post has been deleted.\n")
 		return
 	}
-	w.Header().Set("Content-Type", ap.ContentType)
-	w.WriteHeader(http.StatusGone)
-	enc := json.NewEncoder(w)
-	enc.SetEscapeHTML(false)
-	enc.Encode(publish.Tombstone(s.cfg.Actor, post))
+	// The Tombstone is a real representation, so it is tagged like any other —
+	// which also guarantees it does not reuse the Note's validator.
+	if err := httpcache.WriteJSONStatus(w, http.StatusGone, ap.ContentType,
+		ap.CacheControl, publish.Tombstone(s.cfg.Actor, post)); err != nil {
+		s.log.Error("write tombstone failed", "ap_id", post.APID.String, "err", err)
+	}
 }
 
 func (s *Server) handleOutboxPage(w http.ResponseWriter, r *http.Request, total int) {
@@ -87,7 +95,7 @@ func (s *Server) handleOutboxPage(w http.ResponseWriter, r *http.Request, total 
 	if page*perPage < total {
 		doc["next"] = "https://" + s.cfg.Actor.Host + "/outbox?page=" + strconv.Itoa(page+1)
 	}
-	ap.WriteJSON(w, ap.ContentType, doc)
+	s.writeAP(w, r, doc)
 }
 
 func (s *Server) handleInteractions(w http.ResponseWriter, r *http.Request) {
@@ -144,19 +152,6 @@ func (s *Server) handleInteractions(w http.ResponseWriter, r *http.Request) {
 		payload["replies"] = replies
 	}
 
-	// Serialize once (matching WriteJSON's non-HTML-escaping) so the ETag is
-	// a fingerprint of the exact bytes we'd send.
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.SetEscapeHTML(false)
-	if err := enc.Encode(payload); err != nil {
-		http.Error(w, "server error", http.StatusInternalServerError)
-		return
-	}
-	body := buf.Bytes()
-	sum := sha256.Sum256(body)
-	etag := `"` + hex.EncodeToString(sum[:16]) + `"`
-
 	h := w.Header()
 	h.Set("Access-Control-Allow-Origin", "*")
 	h.Set("Access-Control-Expose-Headers", "ETag")
@@ -166,28 +161,8 @@ func (s *Server) handleInteractions(w http.ResponseWriter, r *http.Request) {
 	// the origin never sees a spike. max-age=0 keeps browsers revalidating
 	// against the ETag (cheap 304s) so the widget stays close to live. See
 	// Cloudflare-Cache.md for the Cache Rule and Tiered Cache setup this needs.
-	h.Set("Cache-Control", "public, max-age=0, s-maxage=30, stale-while-revalidate=300")
-	h.Set("ETag", etag)
-	h.Set("Content-Type", "application/json; charset=utf-8")
-	if etagMatches(r.Header.Get("If-None-Match"), etag) {
-		w.WriteHeader(http.StatusNotModified)
-		return
+	const cacheControl = "public, max-age=0, s-maxage=30, stale-while-revalidate=300"
+	if err := httpcache.WriteJSON(w, r, "application/json; charset=utf-8", cacheControl, payload); err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
 	}
-	w.Write(body)
-}
-
-// etagMatches reports whether an If-None-Match header covers etag, handling
-// the "*", comma-separated, and weak-validator ("W/") forms.
-func etagMatches(ifNoneMatch, etag string) bool {
-	if ifNoneMatch == "" {
-		return false
-	}
-	for _, tok := range strings.Split(ifNoneMatch, ",") {
-		tok = strings.TrimSpace(tok)
-		tok = strings.TrimPrefix(tok, "W/")
-		if tok == "*" || tok == etag {
-			return true
-		}
-	}
-	return false
 }

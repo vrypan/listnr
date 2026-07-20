@@ -94,7 +94,7 @@ func (s *Server) handleOutbox(w http.ResponseWriter, r *http.Request) {
 		if n > 0 {
 			doc["first"] = "https://" + s.cfg.Actor.Host + "/outbox?page=1"
 		}
-		ap.WriteJSON(w, ap.ContentType, doc)
+		s.writeAP(w, r, doc)
 		return
 	}
 	s.handleOutboxPage(w, r, n)
@@ -106,13 +106,13 @@ func (s *Server) handleFollowers(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "server error", http.StatusInternalServerError)
 		return
 	}
-	s.writeCollection(w, "/followers", n)
+	s.writeCollection(w, r, "/followers", n)
 }
 
 // writeCollection serves a count-only OrderedCollection; the outbox gains
 // item pages in milestone 3.
-func (s *Server) writeCollection(w http.ResponseWriter, path string, total int) {
-	ap.WriteJSON(w, ap.ContentType, map[string]any{
+func (s *Server) writeCollection(w http.ResponseWriter, r *http.Request, path string, total int) {
+	s.writeAP(w, r, map[string]any{
 		"@context":   "https://www.w3.org/ns/activitystreams",
 		"id":         "https://" + s.cfg.Actor.Host + path,
 		"type":       "OrderedCollection",

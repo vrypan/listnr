@@ -429,6 +429,30 @@ It uses `data-url` when present and falls back to the current page URL. It
 strips query strings and fragments before making the request. Replies are
 sanitized on the server before they are stored and served.
 
+## HTTP Caching
+
+Fediverse servers dereference the same actor, post, outbox, and followers
+documents repeatedly. Every ActivityPub JSON response carries a strong `ETag`
+computed over the exact bytes sent, so a repeat fetch of unchanged state costs
+a bodyless `304` instead of a full document.
+
+The policy is `Cache-Control: public, max-age=0, must-revalidate`: a cache may
+store the document but must revalidate before reusing it. listnr deliberately
+does not promise freshness for a fixed interval — a post can be updated or
+withdrawn, and the profile can change, at any moment.
+
+The ETag changes whenever the visible representation does: an edited profile
+or rotated key changes the actor's, an `Update` or a `Tombstone` changes a
+post's, a new post changes the outbox's, and a new follower changes the
+followers collection's.
+
+`/actor` and `/posts/{id}` answer differently to browsers and to fediverse
+software, so they also send `Vary: Accept`.
+
+This reduces bandwidth and origin work; it does not eliminate origin requests,
+since every revalidation is still a request. Cloudflare configuration remains
+operator-owned — see Cloudflare-Cache.md.
+
 ## Deployment
 
 A typical deployment is:

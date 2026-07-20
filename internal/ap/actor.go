@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/vrypan/listnr/internal/config"
+	"github.com/vrypan/listnr/internal/httpcache"
 )
 
 const ContentType = `application/activity+json; charset=utf-8`
@@ -122,13 +123,22 @@ func actorTags(tags []config.ActorTag) []map[string]any {
 	return out
 }
 
+// CacheControl is the revalidation policy for ActivityPub documents: storable
+// and conditionally revalidated, but never assumed fresh for a fixed window,
+// because actor and post state can change at any time.
+const CacheControl = "public, max-age=0, must-revalidate"
+
 func (h *Handler) ServeActor(w http.ResponseWriter, r *http.Request) {
+	// This URL has two representations, so a shared cache must key on Accept.
+	httpcache.AddVary(w, "Accept")
 	// Browsers land on the blog; AP servers get the JSON-LD document.
 	if !WantsActivityJSON(r) {
 		http.Redirect(w, r, h.Actor.BlogURL, http.StatusFound)
 		return
 	}
-	WriteJSON(w, ContentType, h.Document())
+	if err := httpcache.WriteJSON(w, r, ContentType, CacheControl, h.Document()); err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+	}
 }
 
 func WantsActivityJSON(r *http.Request) bool {

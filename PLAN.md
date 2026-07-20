@@ -471,6 +471,21 @@ Implemented in `internal/server/public.go`, `internal/server/admin.go`, and
 - No migration was needed. The queue has no `created_at`, but ids are assigned
   in insertion order, so `ORDER BY id DESC` is newest-first.
 
+## Milestone 10 — HTTP validators on ActivityPub documents (done)
+
+- `internal/httpcache` owns exact-representation ETags: it serializes once,
+  hashes the very bytes it will write, and either writes them or answers a
+  bodyless 304. `Matches` implements RFC 9110 weak comparison, tag lists, and
+  `*`. `AddVary` appends without clobbering an existing `Origin`.
+- The interactions endpoint moved onto the helper first, as a characterization
+  gate: its ETag values, Cloudflare cache-control, and CORS headers are
+  unchanged.
+- `/actor`, `/posts/{id}`, `/outbox` and its pages, and `/followers` now
+  revalidate with `Cache-Control: public, max-age=0, must-revalidate`.
+  Tombstones are tagged too, but a 410 is never turned into a 304.
+- ETags are not attached to redirects, the browser interstitial, plain error
+  bodies, WebFinger, the inbox, or admin responses.
+
 ## Gotchas the implementer must not "fix"
 
 - Webfinger must keep answering for BOTH `acct:blog@vrypan.net` and

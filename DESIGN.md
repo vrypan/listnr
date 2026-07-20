@@ -33,11 +33,20 @@ fully static and is never touched.
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/.well-known/webfinger?resource=acct:blog@vrypan.net` | JRD doc; `subject: acct:blog@vrypan.net`, `rel=self` link to the actor. Also answers for `acct:blog@ap.vrypan.net` (Mastodon's reverse check). Anything else → 404. |
-| GET | `/actor` | Actor document (`Person`, `preferredUsername: blog`, public key, `url: https://blog.vrypan.net`, icon, summary). Content negotiation: browsers get a redirect to the blog. |
+| GET | `/actor` | Actor document (`Person`, `preferredUsername: blog`, public key, `url: https://blog.vrypan.net`, icon, summary). Content negotiation: browsers get a redirect to the blog, so the response carries `Vary: Accept`. |
 | POST | `/inbox` | The only write endpoint. Verifies HTTP Signature, dispatches by activity type (see below). |
 | GET | `/outbox` | `OrderedCollection` of past `Create(Note)` activities, paged. |
 | GET | `/followers` | `OrderedCollection`; publishes `totalItems`, items pages optional. |
 | GET | `/posts/{id}` | Dereferenceable `Note` object for each announced post. Browsers get an interstitial that opens the post on the visitor's own instance (`/authorize_interaction`, instance remembered in localStorage). A withdrawn post answers `410 Gone` with a `Tombstone` (browsers get a plain `410`); an id that never existed stays `404`. |
+
+All ActivityPub JSON responses (`/actor`, `/posts/{id}` including Tombstones,
+`/outbox` and its pages, `/followers`) carry a strong `ETag` computed by
+`internal/httpcache` over the exact bytes written, plus `Cache-Control: public,
+max-age=0, must-revalidate`. That permits storage and conditional
+revalidation — a matching `If-None-Match` gets a bodyless `304` — without
+promising freshness for any fixed interval, since a post can be updated or
+withdrawn and the profile can change at any moment. Paths with both a browser
+and an ActivityPub representation add `Vary: Accept`.
 
 ### Public (blog integration)
 
