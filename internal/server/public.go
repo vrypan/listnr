@@ -5,12 +5,14 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/vrypan/listnr/internal/ap"
 	"github.com/vrypan/listnr/internal/publish"
+	"github.com/vrypan/listnr/internal/store"
 )
 
 func (s *Server) handlePost(w http.ResponseWriter, r *http.Request) {
@@ -24,6 +26,10 @@ func (s *Server) handlePost(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	if post.Deleted() {
+		s.servePostGone(w, r, post)
+		return
+	}
 	if !ap.WantsActivityJSON(r) {
 		s.serveInterstitial(w, post)
 		return
@@ -34,6 +40,24 @@ func (s *Server) handlePost(w http.ResponseWriter, r *http.Request) {
 	// Create/Update fan-out the wrapping activity provides it instead.
 	note["@context"] = "https://www.w3.org/ns/activitystreams"
 	ap.WriteJSON(w, ap.ContentType, note)
+}
+
+// servePostGone answers for a withdrawn post. ActivityPub says a server SHOULD
+// respond 410 and MAY include a Tombstone, which is also what Mastodon does; a
+// browser gets the same status in prose rather than the instance chooser,
+// since there is no longer anything to interact with.
+func (s *Server) servePostGone(w http.ResponseWriter, r *http.Request, post *store.Post) {
+	if !ap.WantsActivityJSON(r) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusGone)
+		io.WriteString(w, "This post has been deleted.\n")
+		return
+	}
+	w.Header().Set("Content-Type", ap.ContentType)
+	w.WriteHeader(http.StatusGone)
+	enc := json.NewEncoder(w)
+	enc.SetEscapeHTML(false)
+	enc.Encode(publish.Tombstone(s.cfg.Actor, post))
 }
 
 func (s *Server) handleOutboxPage(w http.ResponseWriter, r *http.Request, total int) {
@@ -80,7 +104,10 @@ func (s *Server) handleInteractions(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "server error", http.StatusInternalServerError)
 		return
 	}
-	if post != nil {
+	// A withdrawn post reports no counts and no fediverse URL: the widget has
+	// nothing left to link to. The stored interactions themselves are kept —
+	// they remain useful for moderation and audit.
+	if post != nil && !post.Deleted() {
 		if post.APID.Valid {
 			payload["fediverse_url"] = post.APID.String
 		}

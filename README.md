@@ -214,6 +214,10 @@ listnr block rm spam.example
 listnr followers list
 listnr followers rm 42
 
+listnr posts list
+listnr posts list --limit 20 --offset 20
+listnr posts delete 42
+
 listnr version
 listnr version --json
 ```
@@ -292,6 +296,36 @@ After the first run:
   `Create`;
 - changed feed items whose posts were federated are announced with `Update`;
 - items missing from the feed are ignored because feeds often truncate.
+
+## Deleting a Post
+
+Feeds truncate, so an item disappearing from the feed is never treated as a
+deletion. Withdrawing a post is always an explicit administrative act:
+
+```sh
+listnr posts list          # find the numeric store id
+listnr posts delete 42
+```
+
+`listnr posts delete` records a deletion timestamp and queues an ActivityPub
+`Delete` to every follower inbox in one database transaction, so the post can
+never be marked deleted without its deliveries also being queued.
+
+The command is idempotent. Repeating it prints `already deleted` and queues
+nothing, so a retrying script cannot flood followers with duplicate `Delete`
+activities.
+
+Afterwards:
+
+- the post's ActivityPub URL answers `410 Gone` with a `Tombstone` — the id
+  keeps resolving, so servers that missed the `Delete` still learn it is gone;
+- browsers visiting the same URL get a plain `410 Gone` page instead of the
+  instance chooser;
+- the post leaves the outbox total and its pages;
+- `/api/interactions` reports zero counts and a null `fediverse_url`.
+
+Replies, likes, and boosts already stored for the post are kept in the
+database for moderation and audit, and the row itself is not purged.
 
 ## Blog Widget
 

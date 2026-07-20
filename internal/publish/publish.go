@@ -104,6 +104,36 @@ func Update(cfg config.Actor, p *store.Post, updated time.Time) map[string]any {
 	}
 }
 
+// Delete withdraws a post. Its object is the Note's AP id rather than an
+// embedded Note: the object is gone, so there is nothing left to describe.
+// The id is derived from that AP id, so re-sending a Delete for the same post
+// is recognisably the same activity.
+func Delete(cfg config.Actor, p *store.Post) map[string]any {
+	apID := p.APID.String
+	return map[string]any{
+		"@context":  "https://www.w3.org/ns/activitystreams",
+		"id":        apID + "#delete",
+		"type":      "Delete",
+		"actor":     cfg.ID(),
+		"to":        []string{Public},
+		"cc":        []string{"https://" + cfg.Host + "/followers"},
+		"object":    apID,
+		"published": p.DeletedAt.String,
+	}
+}
+
+// Tombstone is what a withdrawn post's AP id resolves to, so a server that
+// missed the Delete still learns the Note existed and is gone.
+func Tombstone(cfg config.Actor, p *store.Post) map[string]any {
+	return map[string]any{
+		"@context":   "https://www.w3.org/ns/activitystreams",
+		"id":         p.APID.String,
+		"type":       "Tombstone",
+		"formerType": "Note",
+		"deleted":    p.DeletedAt.String,
+	}
+}
+
 func Marshal(v any) ([]byte, error) {
 	return json.Marshal(v)
 }

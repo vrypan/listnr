@@ -427,6 +427,22 @@ Implemented in `internal/server/public.go`, `internal/server/admin.go`, and
 - Tests cover consistent snapshot/restore, actor mismatch, lock exclusion,
   unsafe archive paths, rollback retention, and authenticated no-cache export.
 
+## Milestone 7 — explicit post deletion (done)
+
+- Schema migration 2 adds a nullable `posts.deleted_at`. Existing rows migrate
+  in place with a NULL timestamp; nothing is dropped or rewritten.
+- `store.WithFanOut` is the shared primitive: it runs a mutation and inserts
+  one delivery row per deduplicated follower inbox in a single transaction, so
+  a state change and its fan-out commit together or not at all.
+- `DELETE /admin/posts/{id}` and `listnr posts delete <id>` withdraw a post.
+  The operation is idempotent: a repeat neither moves the timestamp nor
+  enqueues a second `Delete`.
+- A withdrawn post serves `410 Gone` with a `Tombstone` to ActivityPub clients
+  and a plain `410` to browsers, leaves the outbox total and pages, and reports
+  empty `/api/interactions` results. Its stored interactions are kept.
+- `PostCount` is now explicitly the active federated count; `TotalPostCount`
+  remains the all-time ingestion count the poller uses to detect a first run.
+
 ## Gotchas the implementer must not "fix"
 
 - Webfinger must keep answering for BOTH `acct:blog@vrypan.net` and
@@ -439,6 +455,8 @@ Implemented in `internal/server/public.go`, `internal/server/admin.go`, and
 - Followers collection stays count-only. Outbox history beyond backfill stays
   absent. Both intentional.
 - Never fan out during first-run backfill.
+- A feed omitting an item is NOT a deletion — feeds truncate. Deletion is only
+  ever initiated by an authenticated administrator.
 - `db.SetMaxOpenConns(1)` stays.
 - Additive schema migrations only; never drop/rewrite existing tables.
 - The gone-key Delete path (inbox.go) only accepts an actor deleting *itself*

@@ -21,7 +21,8 @@ CREATE TABLE IF NOT EXISTS posts (
 	content_hash TEXT NOT NULL DEFAULT '',
 	ap_id        TEXT UNIQUE,           -- NULL for "seen but never federated"
 	announced_at TEXT,
-	updated_at   TEXT
+	updated_at   TEXT,
+	deleted_at   TEXT                   -- NULL unless an admin withdrew the post
 );
 
 CREATE TABLE IF NOT EXISTS followers (
@@ -95,7 +96,7 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 );
 `
 
-const currentSchemaVersion = 1
+const currentSchemaVersion = 2
 
 type Store struct {
 	DB            *sql.DB
@@ -137,6 +138,17 @@ var migrations = []migration{
 				return err
 			}
 			_, err = tx.Exec(`ALTER TABLE interactions ADD COLUMN in_reply_to TEXT NOT NULL DEFAULT ''`)
+			return err
+		},
+	},
+	{
+		version: 2,
+		apply: func(tx *sql.Tx) error {
+			exists, err := columnExists(tx, "posts", "deleted_at")
+			if err != nil || exists {
+				return err
+			}
+			_, err = tx.Exec(`ALTER TABLE posts ADD COLUMN deleted_at TEXT`)
 			return err
 		},
 	},
@@ -238,8 +250,11 @@ func (s *Store) FollowerCount() (int, error) {
 	return n, err
 }
 
+// PostCount returns the number of active federated posts: those with an AP id
+// that have not been withdrawn. It backs the outbox total, so deleted posts
+// must not appear in it. TotalPostCount remains the all-time ingestion count.
 func (s *Store) PostCount() (int, error) {
 	var n int
-	err := s.DB.QueryRow(`SELECT COUNT(*) FROM posts WHERE ap_id IS NOT NULL`).Scan(&n)
+	err := s.DB.QueryRow(`SELECT COUNT(*) FROM posts WHERE ap_id IS NOT NULL AND deleted_at IS NULL`).Scan(&n)
 	return n, err
 }

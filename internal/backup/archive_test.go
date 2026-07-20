@@ -49,7 +49,7 @@ func TestWriteValidateAndImport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if manifest.ActorID != "https://ap.vrypan.net/actor" || manifest.SchemaVersion != 1 {
+	if manifest.ActorID != "https://ap.vrypan.net/actor" || manifest.SchemaVersion != store.CurrentSchemaVersion() {
 		t.Fatalf("manifest = %+v", manifest)
 	}
 	validated, err := Validate(context.Background(), bytes.NewReader(archive.Bytes()))

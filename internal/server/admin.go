@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,6 +15,8 @@ import (
 
 	"github.com/vrypan/listnr/internal/backup"
 	"github.com/vrypan/listnr/internal/buildinfo"
+	"github.com/vrypan/listnr/internal/publish"
+	"github.com/vrypan/listnr/internal/store"
 )
 
 func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
@@ -57,6 +60,10 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 		s.adminFollowers(w)
 	case r.Method == http.MethodDelete && len(parts) == 2 && parts[0] == "followers":
 		s.adminDeleteFollower(w, parts[1])
+	case r.Method == http.MethodGet && path == "posts":
+		s.adminPosts(w, r)
+	case r.Method == http.MethodDelete && len(parts) == 2 && parts[0] == "posts":
+		s.adminDeletePost(w, parts[1])
 	case r.Method == http.MethodGet && path == "stats":
 		s.adminStats(w)
 	case r.Method == http.MethodPost && path == "poll":
@@ -209,6 +216,97 @@ func (s *Server) adminDeleteFollower(w http.ResponseWriter, rawID string) {
 		return
 	}
 	writeAdminJSON(w, map[string]any{"ok": true})
+}
+
+// adminPost is the administrative view of a stored post. It deliberately omits
+// the rendered Note: administration is about identifying and withdrawing a
+// post, not re-reading it.
+type adminPost struct {
+	ID          int64  `json:"id"`
+	URL         string `json:"url"`
+	Title       string `json:"title"`
+	APID        string `json:"ap_id"`
+	PublishedAt string `json:"published_at"`
+	UpdatedAt   string `json:"updated_at,omitempty"`
+	DeletedAt   string `json:"deleted_at,omitempty"`
+}
+
+func (s *Server) adminPosts(w http.ResponseWriter, r *http.Request) {
+	limit, offset, ok := pagination(r, 100, 200)
+	if !ok {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	posts, err := s.st.ListPostsForAdmin(limit, offset)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	rows := make([]adminPost, 0, len(posts))
+	for _, p := range posts {
+		rows = append(rows, adminPost{
+			ID: p.ID, URL: p.URL, Title: p.Title, APID: p.APID.String,
+			PublishedAt: p.PublishedAt, UpdatedAt: p.UpdatedAt.String,
+			DeletedAt: p.DeletedAt.String,
+		})
+	}
+	writeAdminJSON(w, rows)
+}
+
+// adminDeletePost withdraws a post and queues a Delete to every follower. It
+// answers 200 for a repeat rather than an error so a retrying script can tell
+// "already done" from "failed".
+func (s *Server) adminDeletePost(w http.ResponseWriter, rawID string) {
+	id, err := strconv.ParseInt(rawID, 10, 64)
+	if err != nil {
+		http.NotFound(w, nil)
+		return
+	}
+	result, err := s.st.DeleteFederatedPost(id, store.NowString(), func(p *store.Post) ([]byte, error) {
+		return publish.Marshal(publish.Delete(s.cfg.Actor, p))
+	})
+	if errors.Is(err, store.ErrPostNotFound) {
+		http.NotFound(w, nil)
+		return
+	}
+	if err != nil {
+		s.log.Error("delete post failed", "id", id, "err", err)
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	if !result.AlreadyDeleted {
+		s.log.Info("post deleted", "id", id, "ap_id", result.Post.APID.String,
+			"queued", result.Queued)
+	}
+	writeAdminJSON(w, map[string]any{
+		"ok":              true,
+		"id":              id,
+		"ap_id":           result.Post.APID.String,
+		"deleted_at":      result.Post.DeletedAt.String,
+		"already_deleted": result.AlreadyDeleted,
+		"queued":          result.Queued,
+	})
+}
+
+// pagination reads limit/offset query parameters, applying a default and a cap
+// so an administrative listing cannot be asked for an unbounded page.
+func pagination(r *http.Request, defaultLimit, maxLimit int) (limit, offset int, ok bool) {
+	limit, offset = defaultLimit, 0
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 1 {
+			return 0, 0, false
+		}
+		limit = min(n, maxLimit)
+	}
+	if raw := r.URL.Query().Get("offset"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 0 {
+			return 0, 0, false
+		}
+		offset = n
+	}
+	return limit, offset, true
 }
 
 func (s *Server) adminStats(w http.ResponseWriter) {

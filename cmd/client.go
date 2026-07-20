@@ -44,7 +44,19 @@ func init() {
 	followers.AddCommand(&cobra.Command{Use: "list", RunE: runFollowersList})
 	followers.AddCommand(&cobra.Command{Use: "rm <id>", Args: cobra.ExactArgs(1), RunE: runFollowerRemove})
 
-	rootCmd.AddCommand(replies, block, followers)
+	posts := &cobra.Command{Use: "posts", Short: "Manage published posts"}
+	postsList := &cobra.Command{Use: "list", RunE: runPostsList}
+	postsList.Flags().Int("limit", 0, "maximum posts to show (server caps at 200)")
+	postsList.Flags().Int("offset", 0, "skip this many posts")
+	posts.AddCommand(postsList)
+	posts.AddCommand(&cobra.Command{
+		Use:   "delete <id>",
+		Short: "Withdraw a post and send a Delete to followers",
+		Args:  cobra.ExactArgs(1),
+		RunE:  runPostDelete,
+	})
+
+	rootCmd.AddCommand(replies, block, followers, posts)
 	rootCmd.AddCommand(&cobra.Command{Use: "stats", RunE: runStats})
 	rootCmd.AddCommand(&cobra.Command{
 		Use:     "refresh",
@@ -224,6 +236,74 @@ func runFollowerRemove(cmd *cobra.Command, args []string) error {
 	}
 	_, err := adminRequest(cmd, http.MethodDelete, "/admin/followers/"+args[0], nil)
 	return err
+}
+
+func runPostsList(cmd *cobra.Command, _ []string) error {
+	limit, _ := cmd.Flags().GetInt("limit")
+	offset, _ := cmd.Flags().GetInt("offset")
+	q := url.Values{}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	if offset > 0 {
+		q.Set("offset", strconv.Itoa(offset))
+	}
+	path := "/admin/posts"
+	if enc := q.Encode(); enc != "" {
+		path += "?" + enc
+	}
+	b, err := adminRequest(cmd, http.MethodGet, path, nil)
+	if err != nil {
+		return err
+	}
+	var rows []struct {
+		ID          int64  `json:"id"`
+		URL         string `json:"url"`
+		Title       string `json:"title"`
+		APID        string `json:"ap_id"`
+		PublishedAt string `json:"published_at"`
+		DeletedAt   string `json:"deleted_at"`
+	}
+	if err := json.Unmarshal(b, &rows); err != nil {
+		return err
+	}
+	tw := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
+	fmt.Fprintln(tw, "ID\tSTATUS\tPUBLISHED\tTITLE\tURL\tAP ID")
+	for _, r := range rows {
+		status := "live"
+		if r.DeletedAt != "" {
+			status = "deleted " + r.DeletedAt
+		}
+		fmt.Fprintf(tw, "%d\t%s\t%s\t%s\t%s\t%s\n",
+			r.ID, status, r.PublishedAt, stripTabs(r.Title), r.URL, r.APID)
+	}
+	return tw.Flush()
+}
+
+func runPostDelete(cmd *cobra.Command, args []string) error {
+	if _, err := strconv.ParseInt(args[0], 10, 64); err != nil {
+		return fmt.Errorf("post id must be numeric (see `listnr posts list`): %w", err)
+	}
+	b, err := adminRequest(cmd, http.MethodDelete, "/admin/posts/"+args[0], nil)
+	if err != nil {
+		return err
+	}
+	var result struct {
+		APID           string `json:"ap_id"`
+		DeletedAt      string `json:"deleted_at"`
+		AlreadyDeleted bool   `json:"already_deleted"`
+		Queued         int    `json:"queued"`
+	}
+	if err := json.Unmarshal(b, &result); err != nil {
+		return err
+	}
+	if result.AlreadyDeleted {
+		fmt.Fprintf(cmd.OutOrStdout(), "already deleted at %s: %s\n", result.DeletedAt, result.APID)
+		return nil
+	}
+	fmt.Fprintf(cmd.OutOrStdout(), "deleted at %s: %s (%d deliveries queued)\n",
+		result.DeletedAt, result.APID, result.Queued)
+	return nil
 }
 
 func runStats(cmd *cobra.Command, _ []string) error {

@@ -37,7 +37,7 @@ fully static and is never touched.
 | POST | `/inbox` | The only write endpoint. Verifies HTTP Signature, dispatches by activity type (see below). |
 | GET | `/outbox` | `OrderedCollection` of past `Create(Note)` activities, paged. |
 | GET | `/followers` | `OrderedCollection`; publishes `totalItems`, items pages optional. |
-| GET | `/posts/{id}` | Dereferenceable `Note` object for each announced post. Browsers get an interstitial that opens the post on the visitor's own instance (`/authorize_interaction`, instance remembered in localStorage). |
+| GET | `/posts/{id}` | Dereferenceable `Note` object for each announced post. Browsers get an interstitial that opens the post on the visitor's own instance (`/authorize_interaction`, instance remembered in localStorage). A withdrawn post answers `410 Gone` with a `Tombstone` (browsers get a plain `410`); an id that never existed stays `404`. |
 
 ### Public (blog integration)
 
@@ -53,6 +53,8 @@ fully static and is never touched.
 | POST | `/admin/replies/{id}/hide` · `/unhide` | Toggle a reply's visibility. |
 | DELETE | `/admin/replies/{id}` | Delete a stored reply. |
 | GET/POST/DELETE | `/admin/blocks` | Manage blocklist entries (full actor URL or bare domain). Adding a block hides existing matching interactions. |
+| GET | `/admin/posts` | List federated posts (`limit` default 100, capped at 200; `offset`), including withdrawn ones and their deletion timestamps. |
+| DELETE | `/admin/posts/{id}` | Withdraw a post: set its deletion timestamp and queue a `Delete` to every follower inbox in one transaction. Idempotent — a repeat answers 200 with `already_deleted` and queues nothing. |
 | GET | `/admin/followers` | List followers. |
 | DELETE | `/admin/followers/{id}` | Force-remove a follower. |
 | GET | `/admin/stats` | Application build, database schema version, and counts for followers, posts, interactions, and queue depth. |
@@ -95,7 +97,8 @@ before processing.
 
 ```sql
 posts        (id, guid UNIQUE, url, title, summary_html, published_at,
-              content_hash, ap_id UNIQUE, announced_at, updated_at)
+              content_hash, ap_id UNIQUE, announced_at, updated_at,
+              deleted_at)                     -- NULL unless withdrawn
 followers    (id, actor_id UNIQUE, inbox, shared_inbox, followed_at)
 interactions (id, ap_id UNIQUE, kind CHECK(kind IN ('reply','like','boost')),
               post_id REFERENCES posts, actor_id, actor_handle, actor_name,
@@ -160,6 +163,8 @@ listnr replies list [--post URL] [--hidden]
 listnr replies hide|unhide|delete <id>
 listnr block add|rm|list <actor-or-domain>
 listnr followers list [--rm <id>]
+listnr posts list [--limit N] [--offset N]
+listnr posts delete <id>    # withdraw a post; sends Delete, serves Tombstone
 listnr stats
 listnr refresh       # tell the server to fetch the RSS feed now (alias: poll)
 listnr export [-o FILE|-] [--local]
