@@ -32,11 +32,14 @@ archives:
     files:
       - README.md
       - LICENSE
+      - CHANGELOG.md
 
 checksum:
   name_template: checksums.txt
   algorithm: sha256
 
+# Unused for the GitHub release body: release.yml passes --release-notes built
+# from CHANGELOG.md. This still applies to `goreleaser changelog` and snapshots.
 changelog:
   sort: asc
   filters:
