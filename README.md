@@ -218,6 +218,8 @@ listnr posts list
 listnr posts list --limit 20 --offset 20
 listnr posts delete 42
 
+listnr actor publish
+
 listnr version
 listnr version --json
 ```
@@ -296,6 +298,37 @@ After the first run:
   `Create`;
 - changed feed items whose posts were federated are announced with `Update`;
 - items missing from the feed are ignored because feeds often truncate.
+
+## Updating the Actor Profile
+
+Changing the actor's name, summary, icon, header, fields, tags, aliases, or
+account flags changes the document served at `/actor`, but existing followers
+keep whatever profile their server cached. Most fediverse servers refresh a
+profile when they receive an actor `Update`.
+
+Publishing one is an explicit three-step operation:
+
+1. edit `[actor]` in `listnr.toml`;
+2. restart the daemon so it loads the new values;
+3. run `listnr actor publish`.
+
+```sh
+listnr actor publish
+```
+
+The command sends no data of its own — the server's TOML config is the only
+source of profile content, and neither profile fields nor key material can be
+injected through the admin API. The daemon builds its current actor document,
+fingerprints it, and queues an `Update` carrying the **full** document to every
+follower inbox, recording the fingerprint in the same transaction.
+
+It is idempotent by fingerprint: running it again without a config change
+prints `profile unchanged` and queues nothing. Any change to any actor
+property — including the public key — changes the fingerprint and publishes.
+
+listnr never publishes the profile automatically, including on startup. An
+automatic announcement on every restart would be noisy and would make a
+mistaken config change harder to contain.
 
 ## Deleting a Post
 

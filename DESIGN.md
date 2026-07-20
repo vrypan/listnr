@@ -53,6 +53,7 @@ fully static and is never touched.
 | POST | `/admin/replies/{id}/hide` · `/unhide` | Toggle a reply's visibility. |
 | DELETE | `/admin/replies/{id}` | Delete a stored reply. |
 | GET/POST/DELETE | `/admin/blocks` | Manage blocklist entries (full actor URL or bare domain). Adding a block hides existing matching interactions. |
+| POST | `/admin/actor/publish` | Announce the daemon's currently loaded actor document to followers as an `Update`. Takes no body. Deduplicated by a SHA-256 fingerprint of the document (stored as `actor.published_fingerprint`), so an unchanged profile queues nothing. |
 | GET | `/admin/posts` | List federated posts (`limit` default 100, capped at 200; `offset`), including withdrawn ones and their deletion timestamps. |
 | DELETE | `/admin/posts/{id}` | Withdraw a post: set its deletion timestamp and queue a `Delete` to every follower inbox in one transaction. Idempotent — a repeat answers 200 with `already_deleted` and queues nothing. |
 | GET | `/admin/followers` | List followers. |
@@ -165,6 +166,7 @@ listnr block add|rm|list <actor-or-domain>
 listnr followers list [--rm <id>]
 listnr posts list [--limit N] [--offset N]
 listnr posts delete <id>    # withdraw a post; sends Delete, serves Tombstone
+listnr actor publish        # announce the current actor profile to followers
 listnr stats
 listnr refresh       # tell the server to fetch the RSS feed now (alias: poll)
 listnr export [-o FILE|-] [--local]

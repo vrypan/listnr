@@ -30,7 +30,7 @@ func TestActorDocOptionalProfileProperties(t *testing.T) {
 			"manuallyApprovesFollowers": false,
 		},
 	}}
-	doc := h.actorDoc()
+	doc := h.Document()
 	if got := doc["type"]; got != "Service" {
 		t.Fatalf("type = %q, want Service", got)
 	}

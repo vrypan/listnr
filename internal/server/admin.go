@@ -64,6 +64,8 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 		s.adminPosts(w, r)
 	case r.Method == http.MethodDelete && len(parts) == 2 && parts[0] == "posts":
 		s.adminDeletePost(w, parts[1])
+	case r.Method == http.MethodPost && path == "actor/publish":
+		s.adminPublishActor(w)
 	case r.Method == http.MethodGet && path == "stats":
 		s.adminStats(w)
 	case r.Method == http.MethodPost && path == "poll":
@@ -285,6 +287,43 @@ func (s *Server) adminDeletePost(w http.ResponseWriter, rawID string) {
 		"deleted_at":      result.Post.DeletedAt.String,
 		"already_deleted": result.AlreadyDeleted,
 		"queued":          result.Queued,
+	})
+}
+
+// adminPublishActor announces the daemon's currently loaded actor document to
+// followers. The TOML configuration is the only source of profile data: this
+// endpoint accepts no body, so no profile field or key material can be
+// injected over the admin API.
+//
+// Publication never happens automatically. An operator edits the config,
+// restarts the daemon so it loads the new values, then calls this.
+func (s *Server) adminPublishActor(w http.ResponseWriter) {
+	doc := s.ap.Document()
+	activity, fingerprint, err := publish.ActorUpdate(s.cfg.Actor, doc)
+	if err != nil {
+		s.log.Error("build actor update failed", "err", err)
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	activityJSON, err := publish.Marshal(activity)
+	if err != nil {
+		s.log.Error("marshal actor update failed", "err", err)
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	result, err := s.st.PublishActorUpdate(fingerprint, activityJSON)
+	if err != nil {
+		s.log.Error("publish actor update failed", "err", err)
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	if result.Published {
+		s.log.Info("actor profile published", "fingerprint", fingerprint, "queued", result.Queued)
+	}
+	writeAdminJSON(w, map[string]any{
+		"published":   result.Published,
+		"fingerprint": result.Fingerprint,
+		"queued":      result.Queued,
 	})
 }
 

@@ -56,7 +56,14 @@ func init() {
 		RunE:  runPostDelete,
 	})
 
-	rootCmd.AddCommand(replies, block, followers, posts)
+	actor := &cobra.Command{Use: "actor", Short: "Manage the local actor"}
+	actor.AddCommand(&cobra.Command{
+		Use:   "publish",
+		Short: "Announce the daemon's current actor profile to followers",
+		RunE:  runActorPublish,
+	})
+
+	rootCmd.AddCommand(replies, block, followers, posts, actor)
 	rootCmd.AddCommand(&cobra.Command{Use: "stats", RunE: runStats})
 	rootCmd.AddCommand(&cobra.Command{
 		Use:     "refresh",
@@ -303,6 +310,28 @@ func runPostDelete(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), "deleted at %s: %s (%d deliveries queued)\n",
 		result.DeletedAt, result.APID, result.Queued)
+	return nil
+}
+
+func runActorPublish(cmd *cobra.Command, _ []string) error {
+	b, err := adminRequest(cmd, http.MethodPost, "/admin/actor/publish", nil)
+	if err != nil {
+		return err
+	}
+	var result struct {
+		Published   bool   `json:"published"`
+		Fingerprint string `json:"fingerprint"`
+		Queued      int    `json:"queued"`
+	}
+	if err := json.Unmarshal(b, &result); err != nil {
+		return err
+	}
+	if !result.Published {
+		fmt.Fprintf(cmd.OutOrStdout(), "profile unchanged (%s); nothing queued\n", result.Fingerprint)
+		return nil
+	}
+	fmt.Fprintf(cmd.OutOrStdout(), "profile published (%s); %d deliveries queued\n",
+		result.Fingerprint, result.Queued)
 	return nil
 }
 

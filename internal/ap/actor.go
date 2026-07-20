@@ -18,9 +18,16 @@ type Handler struct {
 	PublicKeyPEM string
 }
 
-func (h *Handler) actorDoc() map[string]any {
-	id := h.Actor.ID()
-	actorType := h.Actor.Type
+// Document builds the actor's complete Person document. It is the single
+// source of that document: the HTTP handler serves exactly what the publisher
+// fingerprints and sends, so no actor property can be visible in one and
+// missing from the other.
+//
+// The result is deterministic — equal inputs marshal to equal bytes — which is
+// what makes fingerprint-based deduplication of actor Updates meaningful.
+func Document(actor config.Actor, publicKeyPEM string) map[string]any {
+	id := actor.ID()
+	actorType := actor.Type
 	if actorType == "" {
 		actorType = "Person"
 	}
@@ -28,7 +35,7 @@ func (h *Handler) actorDoc() map[string]any {
 		"https://www.w3.org/ns/activitystreams",
 		"https://w3id.org/security/v1",
 	}
-	if len(h.Actor.Fields) > 0 {
+	if len(actor.Fields) > 0 {
 		context = append(context, map[string]any{
 			"schema":        "http://schema.org#",
 			"PropertyValue": "schema:PropertyValue",
@@ -39,42 +46,47 @@ func (h *Handler) actorDoc() map[string]any {
 		"@context":          context,
 		"id":                id,
 		"type":              actorType,
-		"preferredUsername": h.Actor.Username,
-		"name":              h.Actor.Name,
-		"summary":           h.Actor.Summary,
-		"url":               h.Actor.BlogURL,
-		"inbox":             "https://" + h.Actor.Host + "/inbox",
-		"outbox":            "https://" + h.Actor.Host + "/outbox",
-		"followers":         "https://" + h.Actor.Host + "/followers",
+		"preferredUsername": actor.Username,
+		"name":              actor.Name,
+		"summary":           actor.Summary,
+		"url":               actor.BlogURL,
+		"inbox":             "https://" + actor.Host + "/inbox",
+		"outbox":            "https://" + actor.Host + "/outbox",
+		"followers":         "https://" + actor.Host + "/followers",
 		"icon": map[string]any{
 			"type": "Image",
-			"url":  h.Actor.Icon,
+			"url":  actor.Icon,
 		},
 		"publicKey": map[string]any{
 			"id":           id + "#main-key",
 			"owner":        id,
-			"publicKeyPem": h.PublicKeyPEM,
+			"publicKeyPem": publicKeyPEM,
 		},
 	}
-	if h.Actor.Header != "" {
+	if actor.Header != "" {
 		doc["image"] = map[string]any{
 			"type": "Image",
-			"url":  h.Actor.Header,
+			"url":  actor.Header,
 		}
 	}
-	if len(h.Actor.AlsoKnownAs) > 0 {
-		doc["alsoKnownAs"] = h.Actor.AlsoKnownAs
+	if len(actor.AlsoKnownAs) > 0 {
+		doc["alsoKnownAs"] = actor.AlsoKnownAs
 	}
-	if fields := actorFields(h.Actor.Fields); len(fields) > 0 {
+	if fields := actorFields(actor.Fields); len(fields) > 0 {
 		doc["attachment"] = fields
 	}
-	if tags := actorTags(h.Actor.Tags); len(tags) > 0 {
+	if tags := actorTags(actor.Tags); len(tags) > 0 {
 		doc["tag"] = tags
 	}
-	for k, v := range h.Actor.Extra {
+	for k, v := range actor.Extra {
 		doc[k] = v
 	}
 	return doc
+}
+
+// Document returns the actor document this handler serves.
+func (h *Handler) Document() map[string]any {
+	return Document(h.Actor, h.PublicKeyPEM)
 }
 
 func actorFields(fields []config.ActorField) []map[string]any {
@@ -116,7 +128,7 @@ func (h *Handler) ServeActor(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, h.Actor.BlogURL, http.StatusFound)
 		return
 	}
-	WriteJSON(w, ContentType, h.actorDoc())
+	WriteJSON(w, ContentType, h.Document())
 }
 
 func WantsActivityJSON(r *http.Request) bool {

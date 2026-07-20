@@ -443,6 +443,21 @@ Implemented in `internal/server/public.go`, `internal/server/admin.go`, and
 - `PostCount` is now explicitly the active federated count; `TotalPostCount`
   remains the all-time ingestion count the poller uses to detect a first run.
 
+## Milestone 8 — actor profile updates (done)
+
+- `ap.Document(actor, publicKeyPEM)` is the single actor-document builder. The
+  `/actor` handler and the publisher both call it, so the served and published
+  documents cannot drift. Any new actor property flows through it and is
+  therefore fingerprinted automatically.
+- `publish.ActorUpdate` wraps that document in an `Update` whose object is the
+  full representation (never a patch) and derives the activity id from a
+  SHA-256 fingerprint of the document.
+- `POST /admin/actor/publish` and `listnr actor publish` announce it. The
+  fingerprint is stored under `actor.published_fingerprint` in the same
+  transaction as the delivery rows.
+- With no followers there is nothing to queue, but the fingerprint is still
+  recorded: the administrator has acknowledged the current representation.
+
 ## Gotchas the implementer must not "fix"
 
 - Webfinger must keep answering for BOTH `acct:blog@vrypan.net` and
@@ -457,6 +472,11 @@ Implemented in `internal/server/public.go`, `internal/server/admin.go`, and
 - Never fan out during first-run backfill.
 - A feed omitting an item is NOT a deletion — feeds truncate. Deletion is only
   ever initiated by an authenticated administrator.
+- The actor profile is never published automatically (not on startup, not by
+  watching the TOML file). It is an explicit `listnr actor publish`; automatic
+  announcement is noisy and makes a bad config change harder to contain.
+- There is deliberately no force-publish for the actor profile. Re-sending an
+  identical document has no defined benefit and only weakens deduplication.
 - `db.SetMaxOpenConns(1)` stays.
 - Additive schema migrations only; never drop/rewrite existing tables.
 - The gone-key Delete path (inbox.go) only accepts an actor deleting *itself*
