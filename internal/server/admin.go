@@ -64,6 +64,14 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 		s.adminPosts(w, r)
 	case r.Method == http.MethodDelete && len(parts) == 2 && parts[0] == "posts":
 		s.adminDeletePost(w, parts[1])
+	case r.Method == http.MethodGet && path == "deliveries":
+		s.adminDeliveries(w, r)
+	case r.Method == http.MethodPost && path == "deliveries/retry-failed":
+		s.adminRetryFailedDeliveries(w)
+	case r.Method == http.MethodPost && len(parts) == 3 && parts[0] == "deliveries" && parts[2] == "retry":
+		s.adminDeliveryAction(w, parts[1], s.st.RetryDelivery)
+	case r.Method == http.MethodDelete && len(parts) == 2 && parts[0] == "deliveries":
+		s.adminDeliveryAction(w, parts[1], s.st.DeleteDelivery)
 	case r.Method == http.MethodPost && path == "actor/publish":
 		s.adminPublishActor(w)
 	case r.Method == http.MethodGet && path == "stats":
@@ -288,6 +296,54 @@ func (s *Server) adminDeletePost(w http.ResponseWriter, rawID string) {
 		"already_deleted": result.AlreadyDeleted,
 		"queued":          result.Queued,
 	})
+}
+
+func (s *Server) adminDeliveries(w http.ResponseWriter, r *http.Request) {
+	status := r.URL.Query().Get("status")
+	limit, offset, ok := pagination(r, 100, 200)
+	if !ok || !store.ValidDeliveryStatus(status) {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	deliveries, err := s.st.ListDeliveries(status, limit, offset)
+	if err != nil {
+		s.log.Error("list deliveries failed", "err", err)
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	writeAdminJSON(w, deliveries)
+}
+
+// adminDeliveryAction applies a single-row queue mutation, mapping the store's
+// two refusal reasons onto 404 (no such row) and 409 (wrong state).
+func (s *Server) adminDeliveryAction(w http.ResponseWriter, rawID string, action func(int64) error) {
+	id, err := strconv.ParseInt(rawID, 10, 64)
+	if err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	switch err := action(id); {
+	case err == nil:
+		writeAdminJSON(w, map[string]any{"ok": true, "id": id})
+	case errors.Is(err, store.ErrDeliveryNotFound):
+		http.NotFound(w, nil)
+	case errors.Is(err, store.ErrDeliveryState):
+		http.Error(w, "delivery is pending; the worker may be sending it", http.StatusConflict)
+	default:
+		s.log.Error("delivery action failed", "id", id, "err", err)
+		http.Error(w, "server error", http.StatusInternalServerError)
+	}
+}
+
+func (s *Server) adminRetryFailedDeliveries(w http.ResponseWriter) {
+	n, err := s.st.RetryFailedDeliveries()
+	if err != nil {
+		s.log.Error("bulk delivery retry failed", "err", err)
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	s.log.Info("failed deliveries requeued", "count", n)
+	writeAdminJSON(w, map[string]any{"ok": true, "retried": n})
 }
 
 // adminPublishActor announces the daemon's currently loaded actor document to

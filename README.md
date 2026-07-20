@@ -220,6 +220,12 @@ listnr posts delete 42
 
 listnr actor publish
 
+listnr deliveries list
+listnr deliveries list --status failed
+listnr deliveries retry 17
+listnr deliveries retry-failed
+listnr deliveries delete 17
+
 listnr version
 listnr version --json
 ```
@@ -298,6 +304,42 @@ After the first run:
   `Create`;
 - changed feed items whose posts were federated are announced with `Update`;
 - items missing from the feed are ignored because feeds often truncate.
+
+## The Delivery Queue
+
+Every outbound activity is queued and delivered by a background worker with
+exponential backoff. A delivery is in one of three states:
+
+| Status | Meaning |
+|---|---|
+| `pending` | waiting for its next attempt, or being sent right now |
+| `done` | accepted by the remote inbox |
+| `failed` | terminal — the retry budget was exhausted, or the inbox is gone |
+
+```sh
+listnr deliveries list                  # newest first
+listnr deliveries list --status failed
+listnr deliveries retry 17              # requeue one failed delivery
+listnr deliveries retry-failed          # requeue all of them
+listnr deliveries delete 17             # drop a failed or done row
+```
+
+Listings show the activity's type and id but never its JSON payload: outbound
+activities can quote inbound-derived content, so the document itself stays out
+of admin responses and logs.
+
+Retrying resets the attempt counter to zero. That is deliberate — an operator
+retrying after fixing DNS or a TLS certificate is asking for a fresh retry
+budget, the original one having been spent against a broken remote.
+
+Only `failed` rows can be retried, and only `failed` or `done` rows can be
+deleted. Pending rows are refused with a `409`: the worker may already be
+sending one, and removing the row would not stop the request in flight. Wait
+for it to settle into `done` or `failed` first.
+
+Finished rows are cleaned up automatically after 30 days; manual deletion is
+for tidying specific entries, not routine maintenance. Do not edit the SQLite
+database directly — use these commands, so the worker sees consistent state.
 
 ## Updating the Actor Profile
 

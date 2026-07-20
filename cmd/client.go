@@ -63,7 +63,31 @@ func init() {
 		RunE:  runActorPublish,
 	})
 
-	rootCmd.AddCommand(replies, block, followers, posts, actor)
+	deliveries := &cobra.Command{Use: "deliveries", Short: "Inspect and recover the outbound queue"}
+	deliveriesList := &cobra.Command{Use: "list", RunE: runDeliveriesList}
+	deliveriesList.Flags().String("status", "", "filter by status: pending, failed, or done")
+	deliveriesList.Flags().Int("limit", 0, "maximum deliveries to show (server caps at 200)")
+	deliveriesList.Flags().Int("offset", 0, "skip this many deliveries")
+	deliveries.AddCommand(deliveriesList)
+	deliveries.AddCommand(&cobra.Command{
+		Use:   "retry <id>",
+		Short: "Requeue a failed delivery",
+		Args:  cobra.ExactArgs(1),
+		RunE:  runDeliveryRetry,
+	})
+	deliveries.AddCommand(&cobra.Command{
+		Use:   "retry-failed",
+		Short: "Requeue every failed delivery",
+		RunE:  runDeliveriesRetryFailed,
+	})
+	deliveries.AddCommand(&cobra.Command{
+		Use:   "delete <id>",
+		Short: "Remove a failed or done delivery row",
+		Args:  cobra.ExactArgs(1),
+		RunE:  runDeliveryDelete,
+	})
+
+	rootCmd.AddCommand(replies, block, followers, posts, actor, deliveries)
 	rootCmd.AddCommand(&cobra.Command{Use: "stats", RunE: runStats})
 	rootCmd.AddCommand(&cobra.Command{
 		Use:     "refresh",

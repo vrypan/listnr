@@ -58,6 +58,10 @@ fully static and is never touched.
 | DELETE | `/admin/posts/{id}` | Withdraw a post: set its deletion timestamp and queue a `Delete` to every follower inbox in one transaction. Idempotent — a repeat answers 200 with `already_deleted` and queues nothing. |
 | GET | `/admin/followers` | List followers. |
 | DELETE | `/admin/followers/{id}` | Force-remove a follower. |
+| GET | `/admin/deliveries` | List queued deliveries newest first (`status` = pending/failed/done or empty for all, `limit` default 100 capped at 200, `offset`). Reports the activity's type and id, never its JSON payload. |
+| POST | `/admin/deliveries/{id}/retry` | Requeue one **failed** delivery, resetting its attempt count. 404 unknown, 409 if the row is pending or done. |
+| POST | `/admin/deliveries/retry-failed` | Requeue every failed delivery in one statement; returns the exact count. |
+| DELETE | `/admin/deliveries/{id}` | Delete one **failed or done** row. 409 for pending rows — the worker may be sending them. |
 | GET | `/admin/stats` | Application build, database schema version, and counts for followers, posts, interactions, and queue depth. |
 | POST | `/admin/poll` | Trigger an immediate feed poll (also the deploy-webhook hook point later). |
 | POST | `/admin/export` | Stream a portable instance backup generated from a consistent SQLite snapshot. Responses are private and non-cacheable. |
@@ -167,6 +171,8 @@ listnr followers list [--rm <id>]
 listnr posts list [--limit N] [--offset N]
 listnr posts delete <id>    # withdraw a post; sends Delete, serves Tombstone
 listnr actor publish        # announce the current actor profile to followers
+listnr deliveries list [--status pending|failed|done] [--limit N] [--offset N]
+listnr deliveries retry <id> | retry-failed | delete <id>
 listnr stats
 listnr refresh       # tell the server to fetch the RSS feed now (alias: poll)
 listnr export [-o FILE|-] [--local]

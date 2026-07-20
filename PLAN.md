@@ -458,6 +458,19 @@ Implemented in `internal/server/public.go`, `internal/server/admin.go`, and
 - With no followers there is nothing to queue, but the fingerprint is still
   recorded: the administrator has acknowledged the current representation.
 
+## Milestone 9 — delivery queue administration (done)
+
+- `GET /admin/deliveries` and `listnr deliveries list` expose the queue with
+  the activity's type and id parsed out in Go. The activity JSON itself is
+  never serialized into an admin response or a log line.
+- Retry is failed-only; delete is failed-or-done-only. Pending rows are
+  refused with 409 because the worker may already be sending them, and
+  removing the row would not cancel the in-flight request.
+- Retry resets `attempts` to zero: an explicit operator retry after fixing the
+  remote deserves a fresh budget.
+- No migration was needed. The queue has no `created_at`, but ids are assigned
+  in insertion order, so `ORDER BY id DESC` is newest-first.
+
 ## Gotchas the implementer must not "fix"
 
 - Webfinger must keep answering for BOTH `acct:blog@vrypan.net` and
