@@ -37,6 +37,8 @@ fully static and is never touched.
 | POST | `/inbox` | The only write endpoint. Verifies HTTP Signature, dispatches by activity type (see below). |
 | GET | `/outbox` | `OrderedCollection` of past `Create(Note)` activities, paged. |
 | GET | `/followers` | `OrderedCollection`; publishes `totalItems`, items pages optional. |
+| GET | `/.well-known/nodeinfo` | NodeInfo discovery: a `links` array with the single rel `http://nodeinfo.diaspora.software/ns/schema/2.1` pointing at `/nodeinfo/2.1` on the configured host. Queries no database state. |
+| GET | `/nodeinfo/2.1` | NodeInfo 2.1: software name/version, `activitypub`, closed registrations, one local user, and the active federated post count. No follower or reply data. |
 | GET | `/posts/{id}` | Dereferenceable `Note` object for each announced post. Browsers get an interstitial that opens the post on the visitor's own instance (`/authorize_interaction`, instance remembered in localStorage). A withdrawn post answers `410 Gone` with a `Tombstone` (browsers get a plain `410`); an id that never existed stays `404`. |
 
 All ActivityPub JSON responses (`/actor`, `/posts/{id}` including Tombstones,

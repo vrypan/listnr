@@ -429,6 +429,26 @@ It uses `data-url` when present and falls back to the current page URL. It
 strips query strings and fragments before making the request. Replies are
 sanitized on the server before they are stored and served.
 
+## NodeInfo
+
+Fediverse crawlers and administration tools use NodeInfo to discover what
+software an instance runs. listnr publishes two unauthenticated endpoints:
+
+| Path | Contents |
+|---|---|
+| `/.well-known/nodeinfo` | a `links` array pointing at the document below |
+| `/nodeinfo/2.1` | the NodeInfo 2.1 document |
+
+What it exposes is deliberately coarse: the software name and running version,
+`activitypub` as the only protocol, registrations closed, one local user, and
+the number of active federated posts.
+
+What it does not expose: followers, replies, likes, boosts, or any per-actor
+data. Remote replies are counted as neither local users nor local comments —
+they live on their authors' own instances. The single user is reported as
+active because the daemon is serving it; listnr does not track activity
+windows just to fill in a metric.
+
 ## HTTP Caching
 
 Fediverse servers dereference the same actor, post, outbox, and followers

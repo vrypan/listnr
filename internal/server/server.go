@@ -61,6 +61,8 @@ func (s *Server) SetConfigPath(path string) {
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /.well-known/webfinger", s.ap.ServeWebfinger)
+	mux.HandleFunc("GET /.well-known/nodeinfo", s.handleNodeInfoDiscovery)
+	mux.HandleFunc("GET /nodeinfo/2.1", s.handleNodeInfo)
 	mux.HandleFunc("GET /actor", s.ap.ServeActor)
 	mux.HandleFunc("POST /inbox", s.handleInbox)
 	mux.HandleFunc("GET /outbox", s.handleOutbox)

@@ -486,6 +486,16 @@ Implemented in `internal/server/public.go`, `internal/server/admin.go`, and
 - ETags are not attached to redirects, the browser interstitial, plain error
   bodies, WebFinger, the inbox, or admin responses.
 
+## Milestone 11 — NodeInfo discovery (done)
+
+- `GET /.well-known/nodeinfo` and `GET /nodeinfo/2.1`, both unauthenticated,
+  typed structs, and tagged with plan 006's ETag helper.
+- Usage is the active federated post count; unfederated and withdrawn rows are
+  excluded. `localComments` is 0 — remote replies are not local comments — and
+  the single user is reported active because the daemon is serving it.
+- Discovery queries no database state, so it keeps answering even if the
+  statistics query fails (which returns a generic 500).
+
 ## Gotchas the implementer must not "fix"
 
 - Webfinger must keep answering for BOTH `acct:blog@vrypan.net` and
