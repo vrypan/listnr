@@ -17,6 +17,9 @@ import (
 // ActorFetcher resolves remote actors (implemented by fedi.Client).
 type ActorFetcher interface {
 	FetchActor(ctx context.Context, actorID string, bypassCache bool) (*fedi.Actor, error)
+	// FetchMoveTarget dereferences a migration target and verifies it names
+	// localActorID in its alsoKnownAs.
+	FetchMoveTarget(ctx context.Context, targetURL, localActorID string) (*fedi.TargetActor, error)
 }
 
 // Deliverer queues outbound activities (implemented by delivery.Queue).

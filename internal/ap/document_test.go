@@ -43,7 +43,7 @@ func TestServedActorMatchesBuiltDocument(t *testing.T) {
 		t.Fatalf("code = %d", w.Code)
 	}
 
-	built, err := json.Marshal(Document(h.Actor, h.PublicKeyPEM))
+	built, err := json.Marshal(Document(h.Actor, h.PublicKeyPEM, ""))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,12 +63,12 @@ func TestServedActorMatchesBuiltDocument(t *testing.T) {
 
 func TestDocumentSerializationIsDeterministic(t *testing.T) {
 	h := populatedHandler()
-	first, err := json.Marshal(Document(h.Actor, h.PublicKeyPEM))
+	first, err := json.Marshal(Document(h.Actor, h.PublicKeyPEM, ""))
 	if err != nil {
 		t.Fatal(err)
 	}
 	for i := 0; i < 20; i++ {
-		next, err := json.Marshal(Document(h.Actor, h.PublicKeyPEM))
+		next, err := json.Marshal(Document(h.Actor, h.PublicKeyPEM, ""))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -80,7 +80,7 @@ func TestDocumentSerializationIsDeterministic(t *testing.T) {
 
 func TestDocumentCarriesPublicKey(t *testing.T) {
 	h := populatedHandler()
-	key, ok := Document(h.Actor, h.PublicKeyPEM)["publicKey"].(map[string]any)
+	key, ok := Document(h.Actor, h.PublicKeyPEM, "")["publicKey"].(map[string]any)
 	if !ok {
 		t.Fatal("actor document has no publicKey")
 	}

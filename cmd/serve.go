@@ -67,6 +67,11 @@ var serveCmd = &cobra.Command{
 		apHandler := &ap.Handler{Actor: cfg.Actor, PublicKeyPEM: pubPEM}
 		srv := server.New(cfg, st, apHandler, fetcher, queue, log)
 		srv.SetConfigPath(configPath)
+		// A migration published in an earlier run must keep showing in the
+		// actor document across restarts.
+		if err := srv.RestoreMoveState(); err != nil {
+			return err
+		}
 		poller := feed.NewPoller(cfg, st, queue, log)
 		srv.SetPollFunc(poller.Trigger)
 		go poller.Run(ctx)

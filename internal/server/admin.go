@@ -15,6 +15,7 @@ import (
 
 	"github.com/vrypan/listnr/internal/backup"
 	"github.com/vrypan/listnr/internal/buildinfo"
+	"github.com/vrypan/listnr/internal/feed"
 	"github.com/vrypan/listnr/internal/publish"
 	"github.com/vrypan/listnr/internal/store"
 )
@@ -74,6 +75,10 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 		s.adminDeliveryAction(w, parts[1], s.st.DeleteDelivery)
 	case r.Method == http.MethodPost && path == "actor/publish":
 		s.adminPublishActor(w)
+	case r.Method == http.MethodGet && path == "actor/move":
+		s.adminMoveStatus(w)
+	case r.Method == http.MethodPost && path == "actor/move":
+		s.adminMove(w, r)
 	case r.Method == http.MethodGet && path == "stats":
 		s.adminStats(w)
 	case r.Method == http.MethodPost && path == "poll":
@@ -441,6 +446,11 @@ func (s *Server) adminPoll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.pollNow(r.Context()); err != nil {
+		// A frozen actor is a deliberate state, not a server fault.
+		if errors.Is(err, feed.ErrMoved) {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
 		s.log.Error("manual poll failed", "err", err)
 		http.Error(w, "server error", http.StatusInternalServerError)
 		return

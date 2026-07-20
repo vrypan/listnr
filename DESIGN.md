@@ -64,6 +64,8 @@ and an ActivityPub representation add `Vary: Accept`.
 | POST | `/admin/replies/{id}/hide` · `/unhide` | Toggle a reply's visibility. |
 | DELETE | `/admin/replies/{id}` | Delete a stored reply. |
 | GET/POST/DELETE | `/admin/blocks` | Manage blocklist entries (full actor URL or bare domain). Adding a block hides existing matching interactions. |
+| GET | `/admin/actor/move` | Report whether the actor has migrated, and to where. |
+| POST | `/admin/actor/move` | Publish an irreversible migration to `{"target": "https://..."}`. The target is dereferenced first and must name this actor in its `alsoKnownAs`; migration state and one `Move` per follower inbox then commit together. Same target → idempotent 200; different target → 409. |
 | POST | `/admin/actor/publish` | Announce the daemon's currently loaded actor document to followers as an `Update`. Takes no body. Deduplicated by a SHA-256 fingerprint of the document (stored as `actor.published_fingerprint`), so an unchanged profile queues nothing. |
 | GET | `/admin/posts` | List federated posts (`limit` default 100, capped at 200; `offset`), including withdrawn ones and their deletion timestamps. |
 | DELETE | `/admin/posts/{id}` | Withdraw a post: set its deletion timestamp and queue a `Delete` to every follower inbox in one transaction. Idempotent — a repeat answers 200 with `already_deleted` and queues nothing. |
@@ -182,6 +184,8 @@ listnr followers list [--rm <id>]
 listnr posts list [--limit N] [--offset N]
 listnr posts delete <id>    # withdraw a post; sends Delete, serves Tombstone
 listnr actor publish        # announce the current actor profile to followers
+listnr actor move status
+listnr actor move --to <actor-url> --yes   # irreversible migration
 listnr deliveries list [--status pending|failed|done] [--limit N] [--offset N]
 listnr deliveries retry <id> | retry-failed | delete <id>
 listnr stats

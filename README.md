@@ -305,6 +305,84 @@ After the first run:
 - changed feed items whose posts were federated are announced with `Update`;
 - items missing from the feed are ignored because feeds often truncate.
 
+## Migrating to Another Account
+
+If you want to move to a different fediverse account — a Mastodon account, or
+another listnr instance on a new hostname — listnr can publish an ActivityPub
+`Move`, which asks your followers' servers to follow the new account instead.
+
+**This cannot be undone.** listnr has no way to recall a `Move`, and the target
+cannot be changed afterwards. Read this section fully before running it.
+
+What a `Move` does **not** do: it copies no posts, no replies, no followers,
+and no keys. It rewrites no actor or post URLs. Migrating identity is not the
+same as restoring a backup on a new host — see "Backup and Restore".
+
+### Prerequisites
+
+1. Create the target account.
+2. Add this actor's URL (`https://<your host>/actor`) to the target's
+   `alsoKnownAs`. On Mastodon this is *Settings → Account → Move from a
+   different account → create an account alias*.
+3. Confirm the target federates normally — that other servers can see it.
+4. Back up this instance (`listnr export`).
+5. Keep this instance online.
+
+Step 2 is not optional and not a formality. listnr dereferences the target and
+requires it to name this actor in its own `alsoKnownAs` before it will publish
+anything. That reciprocal alias is the only proof that whoever runs the target
+consented; a local config setting would prove nothing, since it would let
+anyone redirect followers to an account they do not control.
+
+### Running it
+
+```sh
+listnr actor move status
+listnr actor move --to https://mastodon.example/users/you --yes
+```
+
+`--yes` is required. The target must be a full `https` actor URL — a bare
+`@you@mastodon.example` handle is not accepted, because resolving it would mean
+guessing which URL you meant for an irreversible operation.
+
+The migration state and one `Move` per follower inbox are written in a single
+transaction. Repeating the exact same command is a safe no-op; a *different*
+target is refused with a conflict.
+
+### Afterwards
+
+The old actor stays fully alive and dereferenceable — that is part of the
+protocol, not an oversight. Its id, keys, inbox, posts, outbox, followers
+collection, and WebFinger all keep working exactly as before; the actor
+document simply gains a `movedTo` property.
+
+What stops is new activity under the old identity:
+
+- feed polling performs no fetch and publishes no `Create` or `Update`;
+- `listnr refresh` reports that the actor has moved;
+- inbound `Follow` requests are acknowledged but neither stored nor accepted;
+- `Undo` and `Delete` keep working, so existing followers can still leave.
+
+Already-queued deliveries are preserved and still sent.
+
+**Keep the old instance online and backed up.** Followers' servers may
+dereference the old actor for a long time; taking it down mid-migration
+strands anyone who has not been redirected yet.
+
+### Interoperability status
+
+The `Move` payload follows the Activity Streams definition and Mastodon's
+documented migration behaviour: `actor` and `object` are the old actor,
+`target` is the new one, and the activity is addressed to the old followers
+collection rather than to Public.
+
+> **Not yet verified against a live Mastodon server.** Plan 005 calls for a
+> manual gate: from a Mastodon test account following a disposable old actor,
+> execute a `Move` to a controlled target and confirm Mastodon follows the
+> target while the old actor stays dereferenceable. That test has not been
+> run, and the target server and version are therefore not recorded here.
+> Treat this feature as unproven end-to-end until it is.
+
 ## The Delivery Queue
 
 Every outbound activity is queued and delivered by a background worker with

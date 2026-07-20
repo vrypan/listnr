@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"sync/atomic"
 
 	"github.com/vrypan/listnr/internal/config"
 	"github.com/vrypan/listnr/internal/httpcache"
@@ -17,6 +18,21 @@ const ContentType = `application/activity+json; charset=utf-8`
 type Handler struct {
 	Actor        config.Actor
 	PublicKeyPEM string
+	// movedTo holds the target of a completed migration. It is set once at
+	// startup and again when a Move is published, while requests are being
+	// served, so it is accessed atomically.
+	movedTo atomic.Value // string
+}
+
+// SetMovedTo records that the actor has migrated. The actor keeps its id,
+// keys, inbox and URLs; movedTo is additive, so everything stays
+// dereferenceable and nothing that already federated breaks.
+func (h *Handler) SetMovedTo(target string) { h.movedTo.Store(target) }
+
+// MovedTo returns the migration target, or "" if the actor has not moved.
+func (h *Handler) MovedTo() string {
+	target, _ := h.movedTo.Load().(string)
+	return target
 }
 
 // Document builds the actor's complete Person document. It is the single
@@ -26,7 +42,8 @@ type Handler struct {
 //
 // The result is deterministic — equal inputs marshal to equal bytes — which is
 // what makes fingerprint-based deduplication of actor Updates meaningful.
-func Document(actor config.Actor, publicKeyPEM string) map[string]any {
+// movedTo, when non-empty, marks the actor as migrated to that target.
+func Document(actor config.Actor, publicKeyPEM, movedTo string) map[string]any {
 	id := actor.ID()
 	actorType := actor.Type
 	if actorType == "" {
@@ -73,6 +90,9 @@ func Document(actor config.Actor, publicKeyPEM string) map[string]any {
 	if len(actor.AlsoKnownAs) > 0 {
 		doc["alsoKnownAs"] = actor.AlsoKnownAs
 	}
+	if movedTo != "" {
+		doc["movedTo"] = movedTo
+	}
 	if fields := actorFields(actor.Fields); len(fields) > 0 {
 		doc["attachment"] = fields
 	}
@@ -87,7 +107,7 @@ func Document(actor config.Actor, publicKeyPEM string) map[string]any {
 
 // Document returns the actor document this handler serves.
 func (h *Handler) Document() map[string]any {
-	return Document(h.Actor, h.PublicKeyPEM)
+	return Document(h.Actor, h.PublicKeyPEM, h.MovedTo())
 }
 
 func actorFields(fields []config.ActorField) []map[string]any {

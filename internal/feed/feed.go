@@ -3,6 +3,7 @@ package feed
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -18,6 +19,11 @@ import (
 )
 
 const maxFeedBody = 1 << 20
+
+// ErrMoved means the actor has migrated, so this instance no longer ingests
+// or publishes anything under the old identity. Existing posts and queued
+// pre-Move deliveries are untouched.
+var ErrMoved = errors.New("actor has moved; publication is frozen")
 
 type Deliverer interface {
 	FanOut(activityJSON []byte) error
@@ -65,7 +71,9 @@ func (p *Poller) Run(ctx context.Context) {
 		case reply := <-p.trigger:
 			reply <- p.Poll(ctx)
 		case <-timer.C:
-			if err := p.Poll(ctx); err != nil {
+			// A frozen actor is the expected steady state after a Move, not a
+			// failure to report every interval.
+			if err := p.Poll(ctx); err != nil && !errors.Is(err, ErrMoved) {
 				p.log.Error("feed poll failed", "err", err)
 			}
 			timer.Reset(interval)
@@ -89,6 +97,16 @@ func (p *Poller) Trigger(ctx context.Context) error {
 }
 
 func (p *Poller) Poll(ctx context.Context) error {
+	// After a Move the old identity publishes nothing further, so there is no
+	// reason to fetch the feed at all.
+	move, err := p.st.CurrentMove()
+	if err != nil {
+		return err
+	}
+	if move != nil {
+		return fmt.Errorf("%w (target %s)", ErrMoved, move.Target)
+	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.cfg.Feed.URL, nil)
 	if err != nil {
 		return err

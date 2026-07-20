@@ -496,6 +496,28 @@ Implemented in `internal/server/public.go`, `internal/server/admin.go`, and
 - Discovery queries no database state, so it keeps answering even if the
   statistics query fails (which returns a generic 500).
 
+## Milestone 12 — actor migration with Move (done, pending live verification)
+
+- Migration state (`move.target`, `move.activity_id`,
+  `move.target_fingerprint`, `move.moved_at`) is written once and never
+  rewritten. `MoveStatus` classifies a proposed target as not moved, same
+  target, or different target; a different target is refused.
+- `fedi.FetchMoveTarget` dereferences the target through the existing signed,
+  SSRF-guarded, size-limited client and requires an exact reciprocal
+  `alsoKnownAs`, parsed from either a string or an array. HTTPS-only, no
+  fragment, id must equal the requested target, actor type must be supported.
+- The Move activity and migration state commit in one transaction. No HTTP
+  happens inside it — the target is fetched first.
+- The old actor gains `movedTo` and keeps everything else. `RestoreMoveState`
+  re-applies it on daemon start, and it flows through the plan 002 fingerprint.
+- After a Move: no feed fetch, no Create/Update, `listnr refresh` returns 409,
+  and new Follows are acknowledged but ignored. Undo/Delete still work.
+
+**Manual gate outstanding.** The plan requires a live Mastodon interoperability
+test (Move from a disposable old actor to a controlled target, confirming
+Mastodon follows the target while the old actor stays dereferenceable). It has
+not been run, so no target server or version is recorded.
+
 ## Gotchas the implementer must not "fix"
 
 - Webfinger must keep answering for BOTH `acct:blog@vrypan.net` and
@@ -513,6 +535,12 @@ Implemented in `internal/server/public.go`, `internal/server/admin.go`, and
 - The actor profile is never published automatically (not on startup, not by
   watching the TOML file). It is an explicit `listnr actor publish`; automatic
   announcement is noisy and makes a bad config change harder to contain.
+- A Move requires the TARGET's own alsoKnownAs to name this actor, fetched over
+  the network. Never accept a local config field as proof of reciprocity — that
+  would let anyone redirect followers to an account they do not control.
+- After a Move the old actor stays online and dereferenceable with unchanged
+  ids. Do not "clean up" by redirecting or removing its routes; followers'
+  servers may dereference it for a long time.
 - There is deliberately no force-publish for the actor profile. Re-sending an
   identical document has no defined benefit and only weakens deduplication.
 - `db.SetMaxOpenConns(1)` stays.

@@ -21,7 +21,7 @@ const testPublicKeyPEM = "-----BEGIN PUBLIC KEY-----\nMIIB\n-----END PUBLIC KEY-
 
 func TestActorUpdateCarriesFullActorAndAudience(t *testing.T) {
 	cfg := actorFixture()
-	doc := ap.Document(cfg, testPublicKeyPEM)
+	doc := ap.Document(cfg, testPublicKeyPEM, "")
 	activity, fingerprint, err := ActorUpdate(cfg, doc)
 	if err != nil {
 		t.Fatal(err)
@@ -102,7 +102,7 @@ func TestActorFingerprintTracksEveryVisibleChange(t *testing.T) {
 }
 
 func fingerprintOf(cfg config.Actor, publicKeyPEM string) (fingerprint, activityID string, err error) {
-	activity, fingerprint, err := ActorUpdate(cfg, ap.Document(cfg, publicKeyPEM))
+	activity, fingerprint, err := ActorUpdate(cfg, ap.Document(cfg, publicKeyPEM, ""))
 	if err != nil {
 		return "", "", err
 	}

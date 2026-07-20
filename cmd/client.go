@@ -62,6 +62,19 @@ func init() {
 		Short: "Announce the daemon's current actor profile to followers",
 		RunE:  runActorPublish,
 	})
+	move := &cobra.Command{
+		Use:   "move",
+		Short: "Migrate this actor to another account (irreversible)",
+		RunE:  runActorMove,
+	}
+	move.Flags().String("to", "", "target actor URL, e.g. https://mastodon.example/users/me")
+	move.Flags().Bool("yes", false, "confirm this irreversible migration")
+	move.AddCommand(&cobra.Command{
+		Use:   "status",
+		Short: "Show whether this actor has migrated",
+		RunE:  runActorMoveStatus,
+	})
+	actor.AddCommand(move)
 
 	deliveries := &cobra.Command{Use: "deliveries", Short: "Inspect and recover the outbound queue"}
 	deliveriesList := &cobra.Command{Use: "list", RunE: runDeliveriesList}

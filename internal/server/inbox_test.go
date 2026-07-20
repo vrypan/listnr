@@ -31,6 +31,18 @@ const (
 type fakeFetcher struct {
 	actors map[string]*fedi.Actor
 	gone   map[string]bool
+	// targets are migration targets that pass validation; anything else is
+	// rejected the way a missing reciprocal alias would be.
+	targets map[string]*fedi.TargetActor
+}
+
+func (f *fakeFetcher) FetchMoveTarget(_ context.Context, targetURL, localActorID string) (*fedi.TargetActor, error) {
+	target, ok := f.targets[targetURL]
+	if !ok {
+		return nil, fmt.Errorf("move target %s does not list %s in its alsoKnownAs",
+			targetURL, localActorID)
+	}
+	return target, nil
 }
 
 func (f *fakeFetcher) FetchActor(_ context.Context, id string, _ bool) (*fedi.Actor, error) {
@@ -109,7 +121,8 @@ func newTestEnv(t *testing.T) *testEnv {
 			Inbox:       "https://remote.example/users/alice/inbox",
 			SharedInbox: "https://remote.example/inbox",
 		}},
-		gone: map[string]bool{},
+		gone:    map[string]bool{},
+		targets: map[string]*fedi.TargetActor{},
 	}
 	deliver := &fakeDeliverer{}
 	log := slog.New(slog.NewTextHandler(nullWriter{}, nil))

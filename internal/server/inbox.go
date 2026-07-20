@@ -228,6 +228,18 @@ func (s *Server) handleFollow(env *envelope, obj *object, actor *fedi.Actor) err
 		s.log.Debug("follow for unknown object ignored", "object", obj.ID)
 		return nil
 	}
+	// After a Move the old identity accepts no new followers: they would be
+	// following an account that has already told everyone to go elsewhere. The
+	// request is still acknowledged with 202, like any other ignored activity.
+	// Undo and Delete keep working, so existing followers can still leave.
+	move, err := s.st.CurrentMove()
+	if err != nil {
+		return err
+	}
+	if move != nil {
+		s.log.Info("follow ignored: actor has moved", "target", move.Target)
+		return nil
+	}
 	if err := s.st.UpsertFollower(actor.ID, actor.Inbox, actor.SharedInbox); err != nil {
 		return err
 	}
